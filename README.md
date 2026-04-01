@@ -1,0 +1,2 @@
+# PRSK_RatingSystem
+音ゲーのスコア画像を読み取ってレートを計算・管理するAndroidアプリです。

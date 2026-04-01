@@ -168,4 +168,41 @@ interface AppDao {
         """
     )
     suspend fun getBestSingleRate(songName: String, difficulty: String): Float?
+
+    @Query(
+        """
+        SELECT level
+        FROM score_records
+        WHERE songName = :songName
+          AND difficulty = :difficulty
+          AND level IS NOT NULL
+          AND id != :excludedRecordId
+        ORDER BY
+          CASE WHEN date IS NULL THEN 1 ELSE 0 END ASC,
+          date DESC,
+          id DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestLevelForChartExcludingRecord(
+        songName: String,
+        difficulty: String,
+        excludedRecordId: Long,
+    ): Int?
+
+    @Query(
+        """
+        UPDATE score_records
+        SET level = :targetLevel
+        WHERE songName = :songName
+          AND difficulty = :difficulty
+          AND level IS NOT NULL
+          AND level != :targetLevel
+        """
+    )
+    suspend fun updateLevelsForChart(
+        songName: String,
+        difficulty: String,
+        targetLevel: Int,
+    ): Int
 }

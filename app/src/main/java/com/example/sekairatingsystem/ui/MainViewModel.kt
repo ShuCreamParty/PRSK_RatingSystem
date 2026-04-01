@@ -44,6 +44,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeColor = MutableStateFlow(preferences.getLong(KEY_THEME_COLOR, DEFAULT_THEME_COLOR))
     val themeColor: StateFlow<Long> = _themeColor.asStateFlow()
 
+    private val _themeMode = MutableStateFlow(
+        ThemeMode.fromPreference(preferences.getString(KEY_THEME_MODE, DEFAULT_THEME_MODE)),
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
     private val _oshiName = MutableStateFlow(preferences.getString(KEY_OSHI_NAME, DEFAULT_OSHI_NAME) ?: DEFAULT_OSHI_NAME)
     val oshiName: StateFlow<String> = _oshiName.asStateFlow()
 
@@ -51,9 +56,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val totalPlayCount: StateFlow<Int> = repository.getTotalScoreRecordsCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    private val _userNameMessage = MutableStateFlow<String?>(null)
-    val userNameMessage: StateFlow<String?> = _userNameMessage.asStateFlow()
 
     val failedRecords: StateFlow<List<ScoreRecord>> = repository.getScoreRecordsByStatus(Constants.STATUS_FAILED)
         .stateIn(
@@ -143,6 +145,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _ocrStatusMessage = MutableStateFlow<String?>(null)
     val ocrStatusMessage: StateFlow<String?> = _ocrStatusMessage.asStateFlow()
 
+    private val _unknownSongNotice = MutableStateFlow<UnknownSongNotice?>(null)
+    val unknownSongNotice: StateFlow<UnknownSongNotice?> = _unknownSongNotice.asStateFlow()
+
     private val _isCalculatingRates = MutableStateFlow(false)
     val isCalculatingRates: StateFlow<Boolean> = _isCalculatingRates.asStateFlow()
 
@@ -158,6 +163,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _manualEditMessage = MutableStateFlow<String?>(null)
     val manualEditMessage: StateFlow<String?> = _manualEditMessage.asStateFlow()
 
+    private val _levelMismatchPrompt = MutableStateFlow<LevelMismatchPrompt?>(null)
+    val levelMismatchPrompt: StateFlow<LevelMismatchPrompt?> = _levelMismatchPrompt.asStateFlow()
+
     private val _isDeletingTrash = MutableStateFlow(false)
     val isDeletingTrash: StateFlow<Boolean> = _isDeletingTrash.asStateFlow()
 
@@ -169,6 +177,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _databaseResetMessage = MutableStateFlow<String?>(null)
     val databaseResetMessage: StateFlow<String?> = _databaseResetMessage.asStateFlow()
+
+    private var pendingEditedSave: PendingEditedSave? = null
 
     fun initializeMasterData() {
         if (_isInitializing.value || _isMasterDataReady.value) {
@@ -191,6 +201,104 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun ensurePersistedUriPermission(context: Context, uri: Uri) {
+        val resolver = context.contentResolver
+        val hasPermission = resolver.persistedUriPermissions.any { permission ->
+            permission.uri == uri && permission.isReadPermission
+        }
+        if (!hasPermission) {
+            resolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }
+    }
+
+    private suspend fun scanFolderForNewImages(
+        context: Context,
+        uri: Uri,
+    ): FolderImportSummary {
+        ensurePersistedUriPermission(context, uri)
+
+        return withContext(Dispatchers.IO) {
+            val imageFiles = ImageFileScanner.getImageFiles(context, uri)
+
+            val existingRecords = repository.getAllScoreRecordsSnapshot()
+            val existingByUri = existingRecords
+                .filter { record -> record.imageUri.isNotBlank() }
+                .associateBy { record -> record.imageUri }
+            val recordsByTimestamp = existingRecords
+                .filter { record -> record.imageUri.isNotBlank() && record.date != null }
+                .groupBy { record -> record.date!! }
+                .mapValues { (_, records) ->
+                    records.sortedByDescending { record -> record.id }.toMutableList()
+                }
+                .toMutableMap()
+
+            val newRecords = mutableListOf<ScoreRecord>()
+            val relinkedRecords = mutableListOf<ScoreRecord>()
+
+            imageFiles.forEach { imageFile ->
+                val imageUri = imageFile.uri.toString()
+                if (existingByUri.containsKey(imageUri)) {
+                    return@forEach
+                }
+
+                val renamedCandidate = imageFile.lastModified?.let { timestamp ->
+                    recordsByTimestamp[timestamp]
+                        ?.firstOrNull()
+                        ?.also { candidate -> recordsByTimestamp[timestamp]?.remove(candidate) }
+                }
+
+                if (renamedCandidate != null) {
+                    relinkedRecords += renamedCandidate.copy(
+                        imageUri = imageUri,
+                        date = imageFile.lastModified,
+                    )
+                } else {
+                    newRecords += ScoreRecord(
+                        imageUri = imageUri,
+                        date = imageFile.lastModified,
+                        status = Constants.STATUS_UNREAD,
+                        isBestFrame = false,
+                        isReservedFrame = false,
+                    )
+                }
+            }
+
+            relinkedRecords.forEach { record ->
+                repository.updateScoreRecord(record)
+            }
+
+            if (newRecords.isNotEmpty()) {
+                repository.insertScoreRecords(newRecords)
+            }
+
+            FolderImportSummary(
+                selectedUri = uri,
+                insertedCount = newRecords.size,
+                relinkedCount = relinkedRecords.size,
+            )
+        }
+    }
+
+    private fun formatFolderScanMessage(summary: FolderImportSummary): String {
+        return when {
+            summary.insertedCount > 0 && summary.relinkedCount > 0 -> {
+                "新規 ${summary.insertedCount} 件を登録し、リネーム済み画像 ${summary.relinkedCount} 件を再リンクしました"
+            }
+            summary.insertedCount > 0 -> {
+                "新規の未読み取り画像を ${summary.insertedCount} 件取り込みました"
+            }
+            summary.relinkedCount > 0 -> {
+                "リネーム済み画像 ${summary.relinkedCount} 件を既存レコードへ再リンクしました"
+            }
+            else -> {
+                "新しく取り込む画像はありませんでした"
+            }
+        }
+    }
+
     fun onFolderSelected(uri: Uri, context: Context) {
         if (_isScanningFolder.value || _isAnalyzingOcr.value || _isCalculatingRates.value) {
             return
@@ -200,89 +308,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isScanningFolder.value = true
 
             runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                )
-
-                val imageFiles = withContext(Dispatchers.IO) {
-                    ImageFileScanner.getImageFiles(context, uri)
-                }
-
-                val existingRecords = repository.getAllScoreRecordsSnapshot()
-                val existingByUri = existingRecords
-                    .filter { record -> record.imageUri.isNotBlank() }
-                    .associateBy { record -> record.imageUri }
-                val recordsByTimestamp = existingRecords
-                    .filter { record -> record.imageUri.isNotBlank() && record.date != null }
-                    .groupBy { record -> record.date!! }
-                    .mapValues { (_, records) ->
-                        records.sortedByDescending { record -> record.id }.toMutableList()
-                    }
-                    .toMutableMap()
-
-                val newRecords = mutableListOf<ScoreRecord>()
-                val relinkedRecords = mutableListOf<ScoreRecord>()
-
-                imageFiles.forEach { imageFile ->
-                    val imageUri = imageFile.uri.toString()
-                    if (existingByUri.containsKey(imageUri)) {
-                        return@forEach
-                    }
-
-                    val renamedCandidate = imageFile.lastModified?.let { timestamp ->
-                        recordsByTimestamp[timestamp]
-                            ?.firstOrNull()
-                            ?.also { candidate -> recordsByTimestamp[timestamp]?.remove(candidate) }
-                    }
-
-                    if (renamedCandidate != null) {
-                        relinkedRecords += renamedCandidate.copy(
-                            imageUri = imageUri,
-                            date = imageFile.lastModified,
-                        )
-                    } else {
-                        newRecords += ScoreRecord(
-                            imageUri = imageUri,
-                            date = imageFile.lastModified,
-                            status = Constants.STATUS_UNREAD,
-                            isBestFrame = false,
-                            isReservedFrame = false,
-                        )
-                    }
-                }
-
-                relinkedRecords.forEach { record ->
-                    repository.updateScoreRecord(record)
-                }
-
-                if (newRecords.isNotEmpty()) {
-                    repository.insertScoreRecords(newRecords)
-                }
-
-                FolderImportSummary(
-                    selectedUri = uri,
-                    insertedCount = newRecords.size,
-                    relinkedCount = relinkedRecords.size,
-                )
+                scanFolderForNewImages(context, uri)
             }.onSuccess { summary ->
                 _selectedFolderUri.value = summary.selectedUri
                 _importedImageCount.value = summary.insertedCount
                 preferences.edit().putString(KEY_SELECTED_FOLDER_URI, summary.selectedUri.toString()).apply()
-                _folderScanMessage.value = when {
-                    summary.insertedCount > 0 && summary.relinkedCount > 0 -> {
-                        "新規 ${summary.insertedCount} 件を登録し、リネーム済み画像 ${summary.relinkedCount} 件を再リンクしました"
-                    }
-                    summary.insertedCount > 0 -> {
-                        "新規の未読み取り画像を ${summary.insertedCount} 件取り込みました"
-                    }
-                    summary.relinkedCount > 0 -> {
-                        "リネーム済み画像 ${summary.relinkedCount} 件を既存レコードへ再リンクしました"
-                    }
-                    else -> {
-                        "新しく取り込む画像はありませんでした"
-                    }
-                }
+                _folderScanMessage.value = formatFolderScanMessage(summary)
             }.onFailure { throwable ->
                 _folderScanMessage.value = throwable.message ?: "フォルダの読み込みに失敗しました"
             }
@@ -297,18 +328,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            val selectedUri = _selectedFolderUri.value
+            if (selectedUri != null) {
+                _isScanningFolder.value = true
+                val scanResult = runCatching { scanFolderForNewImages(context, selectedUri) }
+                _isScanningFolder.value = false
+
+                scanResult.onSuccess { summary ->
+                    _importedImageCount.value = summary.insertedCount
+                    _folderScanMessage.value = formatFolderScanMessage(summary)
+                }.onFailure { throwable ->
+                    _folderScanMessage.value = throwable.message ?: "フォルダの読み込みに失敗しました"
+                    return@launch
+                }
+            }
+
             // --- Phase 1: OCR ---
             _isAnalyzingOcr.value = true
             _ocrProcessedCount.value = 0
             _ocrFailedCount.value = 0
             _ocrStatusMessage.value = "未読み取り画像のOCR解析を開始します..."
+            _unknownSongNotice.value = null
 
             var ocrSucceeded = false
             runCatching {
                 val unreadRecords = repository.getScoreRecordsByStatusSnapshot(Constants.STATUS_UNREAD)
                     .filter(::needsOcrAnalysis)
                 if (unreadRecords.isEmpty()) {
-                    return@runCatching OcrSummary(0, 0)
+                    return@runCatching OcrSummary(
+                        processedCount = 0,
+                        failedCount = 0,
+                        unknownCount = 0,
+                        unknownSongNames = emptyList(),
+                    )
                 }
 
                 val songMasters = repository.getAllSongMastersSnapshot()
@@ -326,17 +378,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                 val processedCount = analyzedResults.size
                 val failedCount = analyzedResults.count { analyzed -> !analyzed.isSuccess }
+                val unknownCount = analyzedResults.count { analyzed -> analyzed.unknownSongName != null }
+                val unknownSongNames = analyzedResults
+                    .mapNotNull { analyzed -> analyzed.unknownSongName?.trim()?.takeIf(String::isNotBlank) }
+                    .filterNot { songName -> songName.equals(UNKNOWN_SONG_PLACEHOLDER, ignoreCase = true) }
+                    .distinct()
+                    .take(UNKNOWN_SONG_NOTICE_NAME_LIMIT)
 
                 _ocrProcessedCount.value = processedCount
                 _ocrFailedCount.value = failedCount
 
-                OcrSummary(processedCount, failedCount)
+                OcrSummary(
+                    processedCount = processedCount,
+                    failedCount = failedCount,
+                    unknownCount = unknownCount,
+                    unknownSongNames = unknownSongNames,
+                )
             }.onSuccess { summary ->
                 ocrSucceeded = true
-                _ocrStatusMessage.value = if (summary.processedCount == 0) {
-                    "OCR対象の未読み取り画像がありませんでした"
-                } else {
-                    "OCR解析が完了しました。成功: ${summary.processedCount - summary.failedCount} 件 / 失敗: ${summary.failedCount} 件"
+                if (summary.unknownCount > 0) {
+                    _unknownSongNotice.value = UnknownSongNotice(
+                        count = summary.unknownCount,
+                        songNames = summary.unknownSongNames,
+                    )
+                }
+
+                _ocrStatusMessage.value = when {
+                    summary.processedCount == 0 -> {
+                        "OCR対象の未読み取り画像がありませんでした"
+                    }
+                    summary.unknownCount > 0 -> {
+                        "OCR解析が完了しました。成功: ${summary.processedCount - summary.failedCount} 件 / 失敗: ${summary.failedCount} 件 / 未登録候補: ${summary.unknownCount} 件"
+                    }
+                    else -> {
+                        "OCR解析が完了しました。成功: ${summary.processedCount - summary.failedCount} 件 / 失敗: ${summary.failedCount} 件"
+                    }
                 }
             }.onFailure { throwable ->
                 _ocrStatusMessage.value = "OCR解析に失敗しました: ${throwable.localizedMessage}"
@@ -400,19 +476,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getCalculatedRecords(): Flow<List<ScoreRecord>> = repository.getCalculatedRecords()
 
-    fun saveUserName(userName: String) {
+    fun dismissUnknownSongNotice() {
+        _unknownSongNotice.value = null
+    }
+
+    fun chooseLevelMismatchReferenceLevel() {
+        resolveLevelMismatch(useReferenceLevel = true)
+    }
+
+    fun chooseLevelMismatchEditedLevel() {
+        resolveLevelMismatch(useReferenceLevel = false)
+    }
+
+    fun cancelLevelMismatchPrompt() {
+        pendingEditedSave = null
+        _levelMismatchPrompt.value = null
+    }
+
+    fun saveProfileSettings(
+        userName: String,
+        oshiName: String,
+        themeColor: Long,
+        themeMode: ThemeMode,
+    ) {
         val normalizedUserName = userName.trim()
 
         preferences.edit()
             .putString(KEY_USER_NAME, normalizedUserName)
+            .putString(KEY_OSHI_NAME, oshiName)
+            .putLong(KEY_THEME_COLOR, themeColor)
+            .putString(KEY_THEME_MODE, themeMode.name)
             .apply()
 
         _userName.value = normalizedUserName
-        _userNameMessage.value = if (normalizedUserName.isBlank()) {
-            "ユーザー名をクリアしました"
-        } else {
-            "ユーザー名を保存しました"
-        }
+        _oshiName.value = oshiName
+        _themeColor.value = themeColor
+        _themeMode.value = themeMode
     }
 
     fun saveEditedScoreRecord(record: ScoreRecord, onSaved: () -> Unit) {
@@ -430,34 +529,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     throw IllegalArgumentException("保存対象のレコードIDが不正です")
                 }
 
-                upsertSongMasterFromEditedRecord(
-                    songName = normalizedRecord.songName,
-                    difficulty = normalizedRecord.difficulty,
-                    level = normalizedRecord.level,
-                )
-
-                if (!isReadyForRateCalculation(normalizedRecord)) {
-                    throw IllegalArgumentException("レート再計算に必要な項目が不足しています")
+                val mismatchPrompt = findLevelMismatchPrompt(normalizedRecord)
+                if (mismatchPrompt != null) {
+                    pendingEditedSave = PendingEditedSave(
+                        record = normalizedRecord,
+                        onSaved = onSaved,
+                        mismatchPrompt = mismatchPrompt,
+                    )
+                    _levelMismatchPrompt.value = mismatchPrompt
+                    return@runCatching SaveEditedRecordOutcome.WAITING_LEVEL_SELECTION
                 }
 
-                val recalculationBaseRecord = normalizedRecord.copy(
-                    status = Constants.STATUS_UNREAD,
-                    isBestFrame = false,
-                    isReservedFrame = false,
-                    singleRate = null,
+                persistEditedRecordAndRecalculate(
+                    normalizedRecord = normalizedRecord,
+                    alignChartLevelToEditedValue = false,
                 )
-                repository.updateScoreRecord(recalculationBaseRecord)
 
-                val ratedRecord = recalculationBaseRecord.copy(
-                    status = Constants.STATUS_CALCULATED,
-                    singleRate = RatingCalculator.calculateSingleRate(recalculationBaseRecord),
+                SaveEditedRecordOutcome.SAVED
+            }.onSuccess { outcome ->
+                when (outcome) {
+                    SaveEditedRecordOutcome.SAVED -> {
+                        pendingEditedSave = null
+                        _levelMismatchPrompt.value = null
+                        _manualEditMessage.value = null
+                        onSaved()
+                    }
+
+                    SaveEditedRecordOutcome.WAITING_LEVEL_SELECTION -> {
+                        // no-op: waits for dialog selection from the UI
+                    }
+                }
+            }.onFailure { throwable ->
+                _manualEditMessage.value = throwable.message ?: "保存に失敗しました"
+            }
+
+            _isSavingEditedRecord.value = false
+        }
+    }
+
+    private fun resolveLevelMismatch(useReferenceLevel: Boolean) {
+        val pendingSave = pendingEditedSave ?: return
+        if (_isSavingEditedRecord.value || _isDeletingEditedImage.value) {
+            return
+        }
+
+        viewModelScope.launch {
+            _isSavingEditedRecord.value = true
+            _manualEditMessage.value = null
+
+            runCatching {
+                val selectedLevel = if (useReferenceLevel) {
+                    pendingSave.mismatchPrompt.referenceLevel
+                } else {
+                    pendingSave.mismatchPrompt.inputLevel
+                }
+
+                val resolvedRecord = pendingSave.record.copy(level = selectedLevel)
+                persistEditedRecordAndRecalculate(
+                    normalizedRecord = resolvedRecord,
+                    alignChartLevelToEditedValue = !useReferenceLevel,
                 )
-                RatingCalculator.updateBestFrame(repository, ratedRecord)
-                val updatedAfterBest = repository.getScoreRecordByIdSnapshot(ratedRecord.id) ?: ratedRecord
-                RatingCalculator.updateReservedFrame(repository, updatedAfterBest.copy(singleRate = ratedRecord.singleRate))
             }.onSuccess {
+                pendingEditedSave = null
+                _levelMismatchPrompt.value = null
                 _manualEditMessage.value = null
-                onSaved()
+                pendingSave.onSaved()
             }.onFailure { throwable ->
                 _manualEditMessage.value = throwable.message ?: "保存に失敗しました"
             }
@@ -668,6 +804,95 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private suspend fun persistEditedRecordAndRecalculate(
+        normalizedRecord: ScoreRecord,
+        alignChartLevelToEditedValue: Boolean,
+    ) {
+        if (alignChartLevelToEditedValue) {
+            applyEditedLevelToExistingChartRecords(
+                songName = normalizedRecord.songName,
+                difficulty = normalizedRecord.difficulty,
+                level = normalizedRecord.level,
+            )
+        }
+
+        upsertSongMasterFromEditedRecord(
+            songName = normalizedRecord.songName,
+            difficulty = normalizedRecord.difficulty,
+            level = normalizedRecord.level,
+        )
+
+        if (!isReadyForRateCalculation(normalizedRecord)) {
+            throw IllegalArgumentException("レート再計算に必要な項目が不足しています")
+        }
+
+        val recalculationBaseRecord = normalizedRecord.copy(
+            status = Constants.STATUS_UNREAD,
+            isBestFrame = false,
+            isReservedFrame = false,
+            singleRate = null,
+        )
+        repository.updateScoreRecord(recalculationBaseRecord)
+
+        val ratedRecord = recalculationBaseRecord.copy(
+            status = Constants.STATUS_CALCULATED,
+            singleRate = RatingCalculator.calculateSingleRate(recalculationBaseRecord),
+        )
+        RatingCalculator.updateBestFrame(repository, ratedRecord)
+        val updatedAfterBest = repository.getScoreRecordByIdSnapshot(ratedRecord.id) ?: ratedRecord
+        RatingCalculator.updateReservedFrame(repository, updatedAfterBest.copy(singleRate = ratedRecord.singleRate))
+    }
+
+    private suspend fun findLevelMismatchPrompt(record: ScoreRecord): LevelMismatchPrompt? {
+        val songName = record.songName ?: return null
+        val difficulty = record.difficulty ?: return null
+        val inputLevel = record.level ?: return null
+
+        val masterLevel = repository.getSongMasterByName(songName)?.getLevelForDifficulty(difficulty)
+        if (masterLevel != null && masterLevel != inputLevel) {
+            return LevelMismatchPrompt(
+                songName = songName,
+                difficulty = difficulty,
+                inputLevel = inputLevel,
+                referenceLevel = masterLevel,
+                referenceSourceLabel = LEVEL_REFERENCE_MASTER,
+            )
+        }
+
+        val historyLevel = repository.getLatestLevelForChartExcludingRecord(
+            songName = songName,
+            difficulty = difficulty,
+            excludedRecordId = record.id,
+        )
+        if (historyLevel != null && historyLevel != inputLevel) {
+            return LevelMismatchPrompt(
+                songName = songName,
+                difficulty = difficulty,
+                inputLevel = inputLevel,
+                referenceLevel = historyLevel,
+                referenceSourceLabel = LEVEL_REFERENCE_HISTORY,
+            )
+        }
+
+        return null
+    }
+
+    private suspend fun applyEditedLevelToExistingChartRecords(
+        songName: String?,
+        difficulty: String?,
+        level: Int?,
+    ) {
+        if (songName.isNullOrBlank() || difficulty.isNullOrBlank() || level == null) {
+            return
+        }
+
+        repository.updateLevelsForChart(
+            songName = songName,
+            difficulty = difficulty,
+            targetLevel = level,
+        )
+    }
+
     private suspend fun upsertSongMasterFromEditedRecord(
         songName: String?,
         difficulty: String?,
@@ -724,7 +949,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): Boolean {
         return !songName.isNullOrBlank() &&
             !difficulty.isNullOrBlank() &&
-            // We allow level to be null here so that unknown songs wait in UNREAD for user edits
+            // Level can be null only for known songs that still need manual level correction.
             perfectCount != null &&
             greatCount != null &&
             goodCount != null &&
@@ -775,9 +1000,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val resolvedMatch = SongNameResolver.resolve(ocrResult, songMasters)
         val resolvedSongMaster = resolvedMatch.songMaster
         val resolvedLevel = ocrResult.level ?: resolvedSongMaster?.getLevelForDifficulty(ocrResult.difficulty)
-        val parsedSongName = resolvedSongMaster?.songName ?: resolvedMatch.matchedText
+        val parsedSongName = resolvedSongMaster?.songName ?: resolvedMatch.matchedText.takeIf(String::isNotBlank)
+        val isUnknownSong = resolvedSongMaster == null
 
-        val isSuccess = isSuccessfulOcrResult(
+        val isSuccess = !isUnknownSong && isSuccessfulOcrResult(
             songName = parsedSongName,
             difficulty = ocrResult.difficulty,
             level = resolvedLevel,
@@ -806,6 +1032,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return OcrAnalyzedRecord(
             record = updatedRecord,
             isSuccess = isSuccess,
+            unknownSongName = if (isUnknownSong) parsedSongName else null,
         )
     }
 
@@ -826,8 +1053,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return reservedRecords
             .sortedWith(
-                compareByDescending<ScoreRecord> { record -> record.singleRate ?: 0f }
-                    .thenByDescending { record -> record.date ?: 0L }
+                compareByDescending<ScoreRecord> { record -> record.date ?: 0L }
                     .thenByDescending { record -> record.id },
             )
             .filter { record ->
@@ -854,11 +1080,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private data class OcrSummary(
         val processedCount: Int,
         val failedCount: Int,
+        val unknownCount: Int,
+        val unknownSongNames: List<String>,
     )
 
     private data class OcrAnalyzedRecord(
         val record: ScoreRecord,
         val isSuccess: Boolean,
+        val unknownSongName: String?,
+    )
+
+    data class UnknownSongNotice(
+        val count: Int,
+        val songNames: List<String>,
+    )
+
+    data class LevelMismatchPrompt(
+        val songName: String,
+        val difficulty: String,
+        val inputLevel: Int,
+        val referenceLevel: Int,
+        val referenceSourceLabel: String,
     )
 
     private data class FolderImportSummary(
@@ -879,30 +1121,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val blockedCount: Int,
     )
 
+    private data class PendingEditedSave(
+        val record: ScoreRecord,
+        val onSaved: () -> Unit,
+        val mismatchPrompt: LevelMismatchPrompt,
+    )
+
+    private enum class SaveEditedRecordOutcome {
+        SAVED,
+        WAITING_LEVEL_SELECTION,
+    }
+
     private fun isRecordProtectedForImageDeletion(record: ScoreRecord): Boolean {
         return record.isBestFrame || record.isReservedFrame
     }
 
-    fun saveThemeColorAndOshi(color: Long, name: String) {
-        preferences.edit()
-            .putLong(KEY_THEME_COLOR, color)
-            .putString(KEY_OSHI_NAME, name)
-            .apply()
-        _themeColor.value = color
-        _oshiName.value = name
-    }
-
     private companion object {
         const val OCR_WORKER_COUNT = 2
+        const val UNKNOWN_SONG_NOTICE_NAME_LIMIT = 5
         const val PREFERENCES_NAME = "sekai_rating_settings"
         const val KEY_USER_NAME = "user_name"
         const val KEY_THEME_COLOR = "theme_color"
+        const val KEY_THEME_MODE = "theme_mode"
         const val KEY_OSHI_NAME = "oshi_name"
         const val KEY_SELECTED_FOLDER_URI = "selected_folder_uri"
+
+        const val UNKNOWN_SONG_PLACEHOLDER = "Unknown Song"
+        const val LEVEL_REFERENCE_MASTER = "マスターデータ"
+        const val LEVEL_REFERENCE_HISTORY = "過去データ"
 
         const val DEFAULT_USER_NAME = "セカイの住人"
         const val DEFAULT_OSHI_NAME = "ミク"
         const val DEFAULT_THEME_COLOR = 0xFF33CCBB
+        const val DEFAULT_THEME_MODE = "SYSTEM"
     }
 }
 

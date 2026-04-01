@@ -1,5 +1,6 @@
 package com.example.sekairatingsystem.ui
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,12 +51,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sekairatingsystem.Constants
 import com.example.sekairatingsystem.R
+import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
+import com.example.sekairatingsystem.ui.theme.LocalOshiColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,8 +71,8 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     val userName by viewModel.userName.collectAsState()
-    val userNameMessage by viewModel.userNameMessage.collectAsState()
     val oshiName by viewModel.oshiName.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
     val selectedFolderUri by viewModel.selectedFolderUri.collectAsState()
     val isScanningFolder by viewModel.isScanningFolder.collectAsState()
     val isDeletingTrash by viewModel.isDeletingTrash.collectAsState()
@@ -75,9 +83,20 @@ fun SettingsScreen(
         .collectAsState(initial = emptyList())
 
     var editableUserName by rememberSaveable(userName) { mutableStateOf(userName) }
+    var selectedOshiName by rememberSaveable(oshiName) { mutableStateOf(oshiName) }
+    var selectedThemeModeName by rememberSaveable(themeMode.name) { mutableStateOf(themeMode.name) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showDeleteBlockedDialog by remember { mutableStateOf(false) }
     var showDatabaseResetConfirmDialog by remember { mutableStateOf(false) }
+
+    val selectedThemeMode = ThemeMode.fromPreference(selectedThemeModeName)
+    val selectedOshiColor = colorResource(id = resolveOshiColorRes(selectedOshiName))
+    val oshiColor = LocalOshiColor.current
+    val isDarkTheme = LocalIsDarkTheme.current
+    val profileSavedToast = stringResource(R.string.settings_profile_saved_toast)
+    val hasPendingChanges = editableUserName.trim() != userName ||
+        selectedOshiName != oshiName ||
+        selectedThemeMode != themeMode
 
     val deletableTrashCount = remember(trashRecords) {
         trashRecords.count { record ->
@@ -201,7 +220,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.settings_user_name_title),
+                            text = stringResource(R.string.settings_profile_title),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         OutlinedTextField(
@@ -211,48 +230,123 @@ fun SettingsScreen(
                             label = { Text(text = stringResource(R.string.settings_user_name_label)) },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Button(
-                            onClick = { viewModel.saveUserName(editableUserName) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(text = stringResource(R.string.settings_user_name_btn))
-                        }
-                        if (!userNameMessage.isNullOrBlank()) {
-                            Text(
-                                text = userNameMessage.orEmpty(),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
-                }
-            }
 
-            item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                        HorizontalDivider()
+
                         Text(
-                            text = stringResource(R.string.settings_folder_title),
-                            style = MaterialTheme.typography.titleMedium,
+                            text = stringResource(R.string.settings_theme_mode_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        ThemeMode.values().forEach { mode ->
+                            val isSelected = selectedThemeMode == mode
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedThemeModeName = mode.name },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedThemeModeName = mode.name },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = oshiColor,
+                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                )
+                                Text(
+                                    text = stringResource(themeModeLabelRes(mode)),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+
+                        HorizontalDivider()
+
+                        Text(
+                            text = stringResource(R.string.settings_oshi_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = stringResource(
-                                R.string.settings_current_folder,
-                                selectedFolderUri?.toString() ?: stringResource(R.string.settings_folder_not_selected),
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = stringResource(R.string.settings_current_oshi, selectedOshiName),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+
+                        OSHI_UNITS.forEach { (unitName, characters) ->
+                            val unitColor = when (unitName) {
+                                "VIRTUAL SINGER" -> if (isDarkTheme) Color(0xFFFFFFFF) else Color(0xFF000000)
+                                "Leo/need" -> Color(0xFF4455DD)
+                                "MORE MORE JUMP!" -> Color(0xFF88DD44)
+                                "Vivid BAD SQUAD" -> Color(0xFFEE1166)
+                                "ワンダーランズ×ショウタイム" -> Color(0xFFFF9900)
+                                "25時、ナイトコードで。" -> Color(0xFF884499)
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                            Text(
+                                text = unitName,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = unitColor,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(
+                                    items = characters,
+                                    key = { character -> character.name },
+                                ) { oshi ->
+                                    val isSelected = selectedOshiName == oshi.name
+                                    val oshiColor = colorResource(id = oshi.colorResId)
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clickable { selectedOshiName = oshi.name }
+                                            .padding(4.dp),
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .clip(CircleShape)
+                                                .background(oshiColor)
+                                                .border(
+                                                    width = if (isSelected) 4.dp else 1.dp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                                    shape = CircleShape,
+                                                ),
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = oshi.name,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         Button(
-                            onClick = { folderPickerLauncher.launch(null) },
-                            enabled = !isScanningFolder,
+                            onClick = {
+                                viewModel.saveProfileSettings(
+                                    userName = editableUserName,
+                                    oshiName = selectedOshiName,
+                                    themeColor = selectedOshiColor.toArgb().toLong(),
+                                    themeMode = selectedThemeMode,
+                                )
+                                Toast.makeText(
+                                    context,
+                                    profileSavedToast,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            },
+                            enabled = hasPendingChanges,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(text = stringResource(R.string.settings_folder_btn))
-                        }
-                        if (isScanningFolder) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                            Text(text = stringResource(R.string.settings_profile_save))
                         }
                     }
                 }
@@ -358,115 +452,43 @@ fun SettingsScreen(
             }
 
             item {
-                Text(
-                    text = stringResource(id = R.string.settings_oshi_title),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = stringResource(id = R.string.settings_oshi_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.settings_current_oshi, oshiName),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OSHI_UNITS.forEach { (unitName, characters) ->
-                    Text(
-                        text = unitName,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
-
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(
-                            items = characters,
-                            key = { character -> character.name },
-                        ) { oshi ->
-                            val isSelected = oshiName == oshi.name
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        viewModel.saveThemeColorAndOshi(oshi.color, oshi.name)
-                                    }
-                                    .padding(4.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(oshi.color))
-                                        .border(
-                                            width = if (isSelected) 4.dp else 1.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                            shape = CircleShape,
-                                        ),
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = oshi.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            }
+                        Text(
+                            text = stringResource(R.string.settings_folder_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.settings_current_folder,
+                                selectedFolderUri?.toString() ?: stringResource(R.string.settings_folder_not_selected),
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Button(
+                            onClick = { folderPickerLauncher.launch(null) },
+                            enabled = !isScanningFolder,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(text = stringResource(R.string.settings_folder_btn))
+                        }
+                        if (isScanningFolder) {
+                            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
                 }
             }
         }
     }
 }
 
-data class OshiChar(val name: String, val color: Long)
-
-private val OSHI_UNITS: List<Pair<String, List<OshiChar>>> = listOf(
-    "VIRTUAL SINGER" to listOf(
-        OshiChar("ミク", 0xFF39C5BB),
-        OshiChar("リン", 0xFFF7D300),
-        OshiChar("レン", 0xFFF2C94C),
-        OshiChar("ルカ", 0xFFFF8FB1),
-        OshiChar("MEIKO", 0xFFD95A5A),
-        OshiChar("KAITO", 0xFF4A90E2),
-    ),
-    "Leo/need" to listOf(
-        OshiChar("一歌", 0xFF4F7DFF),
-        OshiChar("咲希", 0xFFFFD24D),
-        OshiChar("穂波", 0xFFFFA35B),
-        OshiChar("志歩", 0xFF6CC36C),
-    ),
-    "MORE MORE JUMP!" to listOf(
-        OshiChar("みのり", 0xFFFF8FA3),
-        OshiChar("遥", 0xFF7DB8FF),
-        OshiChar("愛莉", 0xFFFF9ECF),
-        OshiChar("雫", 0xFF98D8D2),
-    ),
-    "Vivid BAD SQUAD" to listOf(
-        OshiChar("こはね", 0xFFFFA347),
-        OshiChar("杏", 0xFFFF5A83),
-        OshiChar("彰人", 0xFFE1B12C),
-        OshiChar("冬弥", 0xFF3F88C5),
-    ),
-    "ワンダーランズxショウタイム" to listOf(
-        OshiChar("司", 0xFFFFC857),
-        OshiChar("えむ", 0xFFFF8CCF),
-        OshiChar("寧々", 0xFF6FD6A8),
-        OshiChar("類", 0xFF8D6BE8),
-    ),
-    "25時、ナイトコードで。" to listOf(
-        OshiChar("奏", 0xFFAAB4FF),
-        OshiChar("まふゆ", 0xFF9FA8DA),
-        OshiChar("絵名", 0xFFF0A6FF),
-        OshiChar("瑞希", 0xFFFFA8D1),
-    ),
-)
+private fun themeModeLabelRes(mode: ThemeMode): Int {
+    return when (mode) {
+        ThemeMode.SYSTEM -> R.string.settings_theme_mode_system
+        ThemeMode.LIGHT -> R.string.settings_theme_mode_light
+        ThemeMode.DARK -> R.string.settings_theme_mode_dark
+    }
+}

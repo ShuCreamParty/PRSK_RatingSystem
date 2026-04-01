@@ -1,19 +1,25 @@
 ﻿<resources>
     <string name="app_name">メモリーコレクト</string>
-    <string name="title_best30">BEST 30</string>
-    <string name="title_recent10">RECENT 10</string>
-    <string name="title_total_rate">総合レート</string>
-    <string name="menu_file_management">データ管理</string>
-    <string name="menu_used_list">使用楽曲一覧</string>
-    <string name="menu_settings">設定</string>
-    <string name="menu_home">ホーム</string>
+    <string name="title_best30">ベストレート</string>
+    <string name="title_recent10">直近レート</string>
+    <string name="title_total_rate">プレイヤーレート</string>
     <string name="menu_drawer">メニュー</string>
+    <string name="menu_home">ホーム</string>
+    <string name="menu_used_list">レート対象楽曲</string>
+    <string name="menu_file_management">データ管理</string>
+    <string name="menu_settings">設定</string>
     <string name="main_header_rating">%1$s</string>
     <string name="main_header_rating_default">あなたのレート</string>
     <string name="main_status_title">ステータス</string>
-    <string name="main_status_initializing">マスターデータを初期化中...</string>
-    <string name="main_status_ready">マスターデータの準備完了</string>
-    <string name="main_status_ocr_summary">OCR処理済み: %1$d 件 / 失敗: %2$d 件</string>
+    <string name="main_status_initializing">必要データを初期化中...</string>
+    <string name="main_status_ready">必要データの準備完了</string>
+    <string name="main_status_ocr_summary">スコア読み込み済み: %1$d 件 / 失敗: %2$d 件</string>
+    <string name="main_unknown_song_dialog_title">未登録の楽曲を検出しました</string>
+    <string name="main_unknown_song_dialog_message">OCRで未登録と思われる楽曲が %1$d 件見つかりました。該当データは読取失敗に移動しています。手動編集で曲名を確定してください。</string>
+    <string name="main_unknown_song_dialog_names">候補:
+%1$s</string>
+    <string name="main_unknown_song_dialog_open_failed">失敗一覧を開く</string>
+    <string name="main_unknown_song_dialog_close">閉じる</string>
     <string name="btn_start_calc">レート算出</string>
     <string name="btn_processing">処理中...</string>
     <string name="btn_calc_short">CALC</string>
@@ -26,9 +32,16 @@
     <string name="cd_back">戻る</string>
 
     <string name="settings_title">設定</string>
+    <string name="settings_profile_title">プロフィール設定</string>
+    <string name="settings_profile_save">変更を保存</string>
+    <string name="settings_profile_saved_toast">プロフィール設定を保存しました</string>
     <string name="settings_user_name_title">ユーザー名設定</string>
     <string name="settings_user_name_label">ユーザー名</string>
     <string name="settings_user_name_btn">保存</string>
+    <string name="settings_theme_mode_title">テーマ</string>
+    <string name="settings_theme_mode_system">デバイスの既定</string>
+    <string name="settings_theme_mode_light">ライトモード</string>
+    <string name="settings_theme_mode_dark">ダークモード</string>
     <string name="settings_folder_title">画像フォルダ設定</string>
     <string name="settings_folder_btn">フォルダを選択</string>
     <string name="settings_current_folder">現在のフォルダ: %1$s</string>
@@ -53,8 +66,8 @@
     <string name="settings_db_reset_confirm_yes">実行する</string>
     <string name="settings_db_reset_confirm_no">キャンセル</string>
     <string name="settings_oshi_title">推しキャラ設定</string>
-    <string name="settings_oshi_desc">アプリ背景が推しキャラの色に変わります</string>
-    <string name="settings_current_oshi">現在の推し: %1$s</string>
+    <string name="settings_oshi_desc">アプリテーマがキャラクターの色に変わります</string>
+    <string name="settings_current_oshi">現在選択中: %1$s</string>
 
     <string name="edit_score_image_preview">スコア画像プレビュー</string>
     <string name="edit_score_image_deleted">画像: 削除済み</string>
@@ -65,8 +78,9 @@
     <string name="edit_score_difficulty_hint">EASY / NORMAL / HARD / EXPERT / MASTER / APPEND</string>
     <string name="edit_score_level">レベル</string>
     <string name="edit_score_all_perfect">ALL PERFECT</string>
-    <string name="edit_score_save_recalculate">保存して即座にレートを再計算する</string>
+    <string name="edit_score_save_recalculate">保存してレートを再計算する</string>
     <string name="edit_score_save_recalculate_loading">保存して再計算中...</string>
+    <string name="edit_score_recalculate_done">レートを再計算しました</string>
     <string name="edit_score_delete_image">この画像を削除する</string>
     <string name="edit_score_delete_image_loading">画像を削除中...</string>
     <string name="edit_score_delete_confirm_title">画像削除の確認</string>
@@ -76,12 +90,23 @@
     <string name="edit_score_delete_blocked_title">削除できません</string>
     <string name="edit_score_delete_blocked_message">この画像は現在のレート計算に使用中のため削除できません。</string>
     <string name="edit_score_delete_blocked_ok">閉じる</string>
+    <string name="edit_score_level_mismatch_title">同一譜面でレベル不一致があります</string>
+    <string name="edit_score_level_mismatch_message">曲名: %1$s
+難易度: %2$s
+今回入力レベル: %3$d
+既存の%5$sレベル: %4$d
+
+どちらに合わせますか？</string>
+    <string name="edit_score_level_mismatch_use_reference">既存レベル(Lv.%1$d)に合わせる</string>
+    <string name="edit_score_level_mismatch_use_input">今回入力(Lv.%1$d)に合わせる</string>
 
     <string name="used_list_title">使用楽曲一覧</string>
     <string name="used_list_best_tab">ベスト枠 (30曲)</string>
     <string name="used_list_recent_tab">直近枠 (10曲)</string>
-    <string name="used_list_empty">対象の使用曲はまだありません</string>
-    <string name="used_list_sort_type">ソートタイプ</string>
+    <string name="used_list_empty">対象楽曲はまだありません</string>
+    <string name="used_list_sort_type">ソート</string>
+    <string name="used_list_sort_panel_title">ソート条件</string>
+    <string name="used_list_sort_current">現在の条件: %1$s / %2$s</string>
     <string name="used_list_sort_single_rate">単曲レート</string>
     <string name="used_list_sort_song_name">曲名</string>
     <string name="used_list_sort_level">レベル</string>

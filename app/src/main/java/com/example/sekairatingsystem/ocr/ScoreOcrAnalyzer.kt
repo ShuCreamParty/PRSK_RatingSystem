@@ -51,10 +51,10 @@ class ScoreOcrAnalyzer(
         val songCandidates = extractSongCandidates(lines)
         val isAllPerfect = normalizedWholeText.contains("ALLPERFECT")
         val isFullCombo = normalizedWholeText.contains("FULLCOMBO")
-        val parsedGreatCount = parseMetric(lines, normalizedLines, normalizedWholeText, "GREAT")
-        val parsedGoodCount = parseMetric(lines, normalizedLines, normalizedWholeText, "GOOD")
-        val parsedBadCount = parseMetric(lines, normalizedLines, normalizedWholeText, "BAD")
-        val parsedMissCount = parseMetric(lines, normalizedLines, normalizedWholeText, "MISS")
+        val parsedGreatCount = parseMetric(lines, normalizedLines, "GREAT")
+        val parsedGoodCount = parseMetric(lines, normalizedLines, "GOOD")
+        val parsedBadCount = parseMetric(lines, normalizedLines, "BAD")
+        val parsedMissCount = parseMetric(lines, normalizedLines, "MISS")
 
         return OcrResult(
             rawText = rawText,
@@ -63,7 +63,7 @@ class ScoreOcrAnalyzer(
             songTextCandidates = songCandidates,
             difficulty = difficulty,
             level = level,
-            perfectCount = parseMetric(lines, normalizedLines, normalizedWholeText, "PERFECT"),
+            perfectCount = parseMetric(lines, normalizedLines, "PERFECT"),
             greatCount = if (isAllPerfect) 0 else parsedGreatCount,
             goodCount = if (isAllPerfect || isFullCombo) 0 else parsedGoodCount,
             badCount = if (isAllPerfect || isFullCombo) 0 else parsedBadCount,
@@ -134,16 +134,8 @@ class ScoreOcrAnalyzer(
     private fun parseMetric(
         rawLines: List<String>,
         normalizedLines: List<String>,
-        normalizedWholeText: String,
         vararg labels: String,
     ): Int? {
-        labels.forEach { label ->
-            metricRegex(label).find(normalizedWholeText)
-                ?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { value ->
-                    return value
-                }
-        }
-
         normalizedLines.forEachIndexed { index, normalizedLine ->
             if (labels.none(normalizedLine::contains)) {
                 return@forEachIndexed

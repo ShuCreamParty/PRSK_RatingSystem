@@ -89,4 +89,16 @@ class AppRepository(
 
     suspend fun getBestSingleRate(songName: String, difficulty: String): Float? =
         appDao.getBestSingleRate(songName, difficulty)
+
+    suspend fun getLatestLevelForChartExcludingRecord(
+        songName: String,
+        difficulty: String,
+        excludedRecordId: Long,
+    ): Int? = appDao.getLatestLevelForChartExcludingRecord(songName, difficulty, excludedRecordId)
+
+    suspend fun updateLevelsForChart(
+        songName: String,
+        difficulty: String,
+        targetLevel: Int,
+    ): Int = appDao.updateLevelsForChart(songName, difficulty, targetLevel)
 }

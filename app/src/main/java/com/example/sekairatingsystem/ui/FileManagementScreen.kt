@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -20,8 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,11 +35,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.sekairatingsystem.Constants
 import com.example.sekairatingsystem.R
 import com.example.sekairatingsystem.data.entity.ScoreRecord
+import com.example.sekairatingsystem.ui.theme.CardDark
+import com.example.sekairatingsystem.ui.theme.CardLight
+import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
+import com.example.sekairatingsystem.ui.theme.LocalOshiColor
+import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +58,16 @@ fun FileManagementScreen(
     var selectedTab by rememberSaveable(initialTabStatus) {
         mutableStateOf(FileManagementTab.fromStatus(initialTabStatus))
     }
+    val oshiName by viewModel.oshiName.collectAsState()
+    val selectedTabIndex = FileManagementTab.entries.indexOf(selectedTab)
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
+    val accentColor = colorResource(id = resolveOshiColorRes(oshiName))
+    val isDarkTheme = LocalIsDarkTheme.current
+    val surfaceBackground = if (isDarkTheme) CardDark else CardLight
+    val surfaceContentColor = MaterialTheme.colorScheme.onSurface
+    val cardBackground = themeColor
+    val cardContentColor = themeOnColor
     val recordsFlow = remember(selectedTab) {
         if (selectedTab == FileManagementTab.CALCULATED) {
             viewModel.getCalculatedRecords()
@@ -69,6 +89,12 @@ fun FileManagementScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = themeColor,
+                    titleContentColor = themeOnColor,
+                    navigationIconContentColor = themeOnColor,
+                    actionIconContentColor = themeOnColor,
+                ),
             )
         },
     ) { innerPadding ->
@@ -77,11 +103,23 @@ fun FileManagementScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            TabRow(selectedTabIndex = FileManagementTab.entries.indexOf(selectedTab)) {
+            TabRow(
+                selectedTabIndex = selectedTabIndex,
+                containerColor = surfaceBackground,
+                contentColor = surfaceContentColor,
+                indicator = { tabPositions ->
+                    TabRowDefaults.PrimaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                        color = accentColor,
+                    )
+                },
+            ) {
                 FileManagementTab.entries.forEach { tab ->
                     Tab(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
+                        selectedContentColor = surfaceContentColor,
+                        unselectedContentColor = surfaceContentColor,
                         text = { Text(text = tab.label.substringBefore("(").take(4)) },
                     )
                 }
@@ -122,11 +160,17 @@ private fun FileRecordCard(
     record: ScoreRecord,
     onClick: () -> Unit,
 ) {
+    val cardBackground = LocalOshiColor.current
+    val cardContentColor = LocalOshiOnColor.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 12.dp)
             .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = cardBackground,
+            contentColor = cardContentColor,
+        ),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

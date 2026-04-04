@@ -36,9 +36,6 @@ import com.example.sekairatingsystem.ui.MainScreen
 import com.example.sekairatingsystem.ui.MainViewModel
 import com.example.sekairatingsystem.ui.SettingsScreen
 import com.example.sekairatingsystem.ui.UsedListScreen
-import com.example.sekairatingsystem.ui.theme.CardDark
-import com.example.sekairatingsystem.ui.theme.CardLight
-import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
 import com.example.sekairatingsystem.ui.theme.LocalOshiColor
 import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 import kotlinx.coroutines.launch
@@ -50,28 +47,30 @@ fun AppNavigation(viewModel: MainViewModel) {
     val scope = rememberCoroutineScope()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val oshiColor = LocalOshiColor.current
-    val oshiOnColor = LocalOshiOnColor.current
-    val isDarkTheme = LocalIsDarkTheme.current
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
+    val drawerContentColor = themeOnColor
     val drawerItemColors = NavigationDrawerItemDefaults.colors(
-        selectedContainerColor = oshiColor,
-        selectedTextColor = oshiOnColor,
-        selectedIconColor = oshiOnColor,
-        unselectedTextColor = MaterialTheme.colorScheme.onSurface,
-        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        selectedContainerColor = themeColor,
+        selectedTextColor = themeOnColor,
+        selectedIconColor = themeOnColor,
+        unselectedTextColor = themeOnColor.copy(alpha = 0.85f),
+        unselectedIconColor = themeOnColor.copy(alpha = 0.7f),
     )
-    val drawerBackground = if (isDarkTheme) CardDark else CardLight
+    val drawerBackground = themeColor
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                containerColor = drawerBackground,
+                drawerContainerColor = drawerBackground,
+                drawerContentColor = drawerContentColor,
             ) {
                 Text(
                     text = stringResource(R.string.menu_drawer),
                     modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge,
+                    color = drawerContentColor,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 NavigationDrawerItem(

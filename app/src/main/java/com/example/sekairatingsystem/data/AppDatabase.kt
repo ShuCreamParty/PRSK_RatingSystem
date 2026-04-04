@@ -15,7 +15,7 @@ import com.example.sekairatingsystem.data.entity.SongMaster
         SongMaster::class,
         ScoreRecord::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,7 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { database ->
                     INSTANCE = database
                 }
@@ -81,6 +81,20 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("DROP INDEX IF EXISTS index_score_records_imageUri")
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_score_records_imageUri ON score_records(imageUri)"
+                )
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_score_records_isBestFrame_singleRate_id ON score_records(isBestFrame, singleRate, id)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_score_records_isReservedFrame_date_id ON score_records(isReservedFrame, date, id)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_score_records_songName_difficulty_singleRate ON score_records(songName, difficulty, singleRate)"
                 )
             }
         }

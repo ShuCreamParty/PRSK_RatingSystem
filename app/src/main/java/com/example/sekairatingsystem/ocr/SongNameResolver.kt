@@ -10,16 +10,32 @@ object SongNameResolver {
         minSimilarity: Double = DEFAULT_SIMILARITY_THRESHOLD,
     ): ResolvedSongMatch {
         val candidates = buildCandidates(ocrResult)
+        val normalizedCandidates = candidates.map { candidate ->
+            NormalizedNameCandidate(
+                original = candidate,
+                normalized = LevenshteinDistance.normalize(candidate),
+            )
+        }
+        val normalizedSongMasters = songMasters.map { songMaster ->
+            NormalizedSongMaster(
+                songMaster = songMaster,
+                normalizedName = LevenshteinDistance.normalize(sanitizeCandidate(songMaster.songName)),
+            )
+        }
         var bestMatch: ResolvedSongMatch? = null
 
-        if (songMasters.isNotEmpty()) {
-            for (candidate in candidates) {
-                for (songMaster in songMasters) {
-                    val similarity = LevenshteinDistance.similarity(candidate, sanitizeCandidate(songMaster.songName))
-                    if (bestMatch == null || similarity > bestMatch?.similarity!!) {
+        if (normalizedSongMasters.isNotEmpty()) {
+            for (candidate in normalizedCandidates) {
+                for (songMaster in normalizedSongMasters) {
+                    val similarity = LevenshteinDistance.similarityNormalized(
+                        candidate.normalized,
+                        songMaster.normalizedName,
+                    )
+                    val currentBest = bestMatch
+                    if (currentBest == null || similarity > currentBest.similarity) {
                         bestMatch = ResolvedSongMatch(
-                            songMaster = songMaster,
-                            matchedText = candidate,
+                            songMaster = songMaster.songMaster,
+                            matchedText = candidate.original,
                             similarity = similarity,
                         )
                     }
@@ -69,6 +85,16 @@ object SongNameResolver {
     private fun isMeaningfulCandidate(text: String): Boolean {
         return text.isNotBlank() && SONG_TEXT_REGEX.containsMatchIn(text)
     }
+
+    private data class NormalizedNameCandidate(
+        val original: String,
+        val normalized: String,
+    )
+
+    private data class NormalizedSongMaster(
+        val songMaster: SongMaster,
+        val normalizedName: String,
+    )
 
     private const val DEFAULT_SIMILARITY_THRESHOLD = 0.45
     private val SONG_TEXT_REGEX = Regex("[A-Za-zぁ-んァ-ヶ一-龠ー]")

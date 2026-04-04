@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -36,18 +37,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -58,6 +54,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sekairatingsystem.R
+import com.example.sekairatingsystem.ui.theme.CardDark
+import com.example.sekairatingsystem.ui.theme.CardLight
+import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
+import com.example.sekairatingsystem.ui.theme.LocalOshiColor
+import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,11 +76,28 @@ fun MainScreen(
     val isAnalyzingOcr by viewModel.isAnalyzingOcr.collectAsState()
     val isCalculatingRates by viewModel.isCalculatingRates.collectAsState()
     val totalRate by viewModel.totalRate.collectAsState()
-    val bestRateSum by viewModel.bestRateSum.collectAsState()
-    val recentRateSum by viewModel.recentRateSum.collectAsState()
+    val bestRateAverage by viewModel.bestRateAverage.collectAsState()
+    val recentRateAverage by viewModel.recentRateAverage.collectAsState()
+    val rateMode by viewModel.rateMode.collectAsState()
     val totalPlayCount by viewModel.totalPlayCount.collectAsState()
     val oshiName by viewModel.oshiName.collectAsState()
     val unknownSongNotice by viewModel.unknownSongNotice.collectAsState()
+    val isDarkTheme = LocalIsDarkTheme.current
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
+    val surfaceBackground = if (isDarkTheme) CardDark else CardLight
+    val cardBackground = themeColor
+    val cardContentColor = themeOnColor
+    val modeLabel = when (rateMode) {
+        RateMode.ALL -> stringResource(R.string.main_rate_mode_all)
+        RateMode.MASTER_ONLY -> stringResource(R.string.main_rate_mode_master)
+        RateMode.APPEND_ONLY -> stringResource(R.string.main_rate_mode_append)
+    }
+
+    val labelFontSize = 14.sp
+    val valueFontSize = 20.sp
+    val headerFontSize = 20.sp
+    val modeFontSize = 16.sp
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -94,41 +112,48 @@ fun MainScreen(
     unknownSongNotice?.let { notice ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissUnknownSongNotice() },
-            title = { Text(text = stringResource(R.string.main_unknown_song_dialog_title)) },
+            title = {
+                Text(
+                    text = stringResource(R.string.main_unknown_song_dialog_title),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = headerFontSize,
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = stringResource(
-                            R.string.main_unknown_song_dialog_message,
-                            notice.count,
-                        ),
+                        text = stringResource(R.string.main_unknown_song_dialog_message, notice.count),
+                        style = MaterialTheme.typography.bodyMedium,
                     )
-                    if (notice.songNames.isNotEmpty()) {
-                        Text(
-                            text = stringResource(
-                                R.string.main_unknown_song_dialog_names,
-                                notice.songNames.joinToString(separator = "\n"),
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
+                    Text(
+                        text = stringResource(
+                            R.string.main_unknown_song_dialog_names,
+                            notice.songNames.joinToString(separator = "\n")
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ratingStyle.labelColor.copy(alpha = 0.9f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = labelFontSize,
+                    )
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.dismissUnknownSongNotice()
-                        onOpenFailedTab()
-                    },
-                ) {
-                    Text(text = stringResource(R.string.main_unknown_song_dialog_open_failed))
+                TextButton(onClick = {
+                    viewModel.dismissUnknownSongNotice()
+                    onOpenFailedTab()
+                }) {
+                    Text(
+                        text = stringResource(R.string.main_unknown_song_dialog_open_failed),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = modeFontSize,
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissUnknownSongNotice() }) {
                     Text(text = stringResource(R.string.main_unknown_song_dialog_close))
                 }
-            },
+            }
         )
     }
 
@@ -144,6 +169,12 @@ fun MainScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = themeColor,
+                    titleContentColor = themeOnColor,
+                    navigationIconContentColor = themeOnColor,
+                    actionIconContentColor = themeOnColor,
+                ),
             )
         },
     ) { innerPadding ->
@@ -170,6 +201,19 @@ fun MainScreen(
                         .background(ratingStyle.gloss),
                 )
 
+                IconButton(
+                    onClick = { viewModel.toggleRateMode() },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SwapHoriz,
+                        contentDescription = stringResource(R.string.cd_toggle_rate_mode),
+                        tint = ratingStyle.labelColor,
+                    )
+                }
+
                 Column(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -185,6 +229,12 @@ fun MainScreen(
                         text = stringResource(R.string.title_total_rate),
                         style = MaterialTheme.typography.titleMedium,
                         color = ratingStyle.labelColor.copy(alpha = 0.9f),
+                    )
+
+                    Text(
+                        text = modeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ratingStyle.labelColor.copy(alpha = 0.78f),
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -208,24 +258,28 @@ fun MainScreen(
                             Text(
                                 text = stringResource(R.string.title_best30),
                                 color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = labelFontSize,
                             )
                             Text(
-                                text = String.format(Locale.JAPAN, "%.2f", bestRateSum),
+                                text = String.format(Locale.JAPAN, "%.2f", bestRateAverage),
                                 color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = valueFontSize,
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = stringResource(R.string.title_recent10),
                                 color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = labelFontSize,
                             )
                             Text(
-                                text = String.format(Locale.JAPAN, "%.2f", recentRateSum),
+                                text = String.format(Locale.JAPAN, "%.2f", recentRateAverage),
                                 color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = valueFontSize,
                             )
                         }
                     }
@@ -240,26 +294,28 @@ fun MainScreen(
                             Text(
                                 text = stringResource(R.string.main_total_play_count),
                                 color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = labelFontSize,
                             )
                             Text(
                                 text = stringResource(R.string.main_total_play_count_value, totalPlayCount),
                                 color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = valueFontSize,
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = stringResource(R.string.main_oshi_label),
                                 color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = labelFontSize,
                             )
                             Text(
                                 text = oshiName,
                                 color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = valueFontSize,
                             )
                         }
                     }
@@ -275,7 +331,10 @@ fun MainScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -292,6 +351,12 @@ fun MainScreen(
                                 .fillMaxWidth()
                                 .height(64.dp),
                             shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = surfaceBackground,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                disabledContainerColor = surfaceBackground.copy(alpha = 0.6f),
+                                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            ),
                         ) {
                             Text(text = stringResource(R.string.btn_select_folder))
                         }
@@ -302,41 +367,33 @@ fun MainScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             } else {
-                val pulseAnimation = rememberInfiniteTransition()
-                val pulseScale by pulseAnimation.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.05f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 650),
-                        repeatMode = RepeatMode.Reverse,
-                    ),
-                )
-
                 ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = Color.Transparent),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
                 ) {
                     Button(
                         onClick = { viewModel.processAllUnreadData(context) },
                         enabled = !isBusy,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(76.dp)
-                            .scale(if (isBusy) pulseScale else 1f),
+                            .height(76.dp),
                         shape = RoundedCornerShape(22.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF353B46),
-                            contentColor = Color(0xFFF4F6F8),
-                            disabledContainerColor = Color(0xFF8A8F98),
-                            disabledContentColor = Color(0xFFE7E7E7),
+                            containerColor = themeColor,
+                            contentColor = themeOnColor,
+                            disabledContainerColor = themeColor.copy(alpha = 0.5f),
+                            disabledContentColor = themeOnColor.copy(alpha = 0.6f),
                         ),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
                     ) {
                         if (isBusy) {
                             CircularProgressIndicator(
-                                color = Color(0xFFF4F6F8),
+                                color = themeOnColor,
                                 modifier = Modifier.size(24.dp),
                                 strokeWidth = 3.dp,
                             )

@@ -10,21 +10,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,11 +38,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sekairatingsystem.R
 import com.example.sekairatingsystem.data.entity.ScoreRecord
+import com.example.sekairatingsystem.ui.theme.CardDark
+import com.example.sekairatingsystem.ui.theme.CardLight
+import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
+import com.example.sekairatingsystem.ui.theme.LocalOshiColor
+import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -68,11 +80,19 @@ fun UsedListScreen(
 ) {
     val bestFrameRecords by viewModel.bestFrameRecords.collectAsState()
     val recentFrameRecords by viewModel.recentFrameRecords.collectAsState()
+    val oshiName by viewModel.oshiName.collectAsState()
 
     var selectedTab by rememberSaveable { mutableStateOf(UsedListTab.BEST) }
     var sortType by rememberSaveable { mutableStateOf(UsedSortType.SINGLE_RATE) }
     var sortOrder by rememberSaveable { mutableStateOf(UsedSortOrder.DESC) }
     var showSortControls by rememberSaveable { mutableStateOf(false) }
+    val isDarkTheme = LocalIsDarkTheme.current
+    val surfaceBackground = if (isDarkTheme) CardDark else CardLight
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
+    val accentColor = colorResource(id = resolveOshiColorRes(oshiName))
+    val baseButtonColor = surfaceBackground
+    val selectedTextColor = if (isDarkTheme) Color.Black else Color.White
 
     val sourceRecords = when (selectedTab) {
         UsedListTab.BEST -> bestFrameRecords
@@ -95,6 +115,12 @@ fun UsedListScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = themeColor,
+                    titleContentColor = themeOnColor,
+                    navigationIconContentColor = themeOnColor,
+                    actionIconContentColor = themeOnColor,
+                ),
             )
         },
     ) { innerPadding ->
@@ -113,31 +139,44 @@ fun UsedListScreen(
                     text = stringResource(UsedListTab.BEST.labelResId),
                     selected = selectedTab == UsedListTab.BEST,
                     modifier = Modifier.weight(1f),
+                    accentColor = accentColor,
+                    baseColor = baseButtonColor,
+                    selectedTextColor = selectedTextColor,
                     onClick = { selectedTab = UsedListTab.BEST },
                 )
                 TabButton(
                     text = stringResource(UsedListTab.RECENT.labelResId),
                     selected = selectedTab == UsedListTab.RECENT,
                     modifier = Modifier.weight(1f),
+                    accentColor = accentColor,
+                    baseColor = baseButtonColor,
+                    selectedTextColor = selectedTextColor,
                     onClick = { selectedTab = UsedListTab.RECENT },
                 )
             }
 
-            OutlinedButton(
-                onClick = { showSortControls = !showSortControls },
+            AccentButton(
+                text = if (showSortControls) {
+                    stringResource(R.string.used_list_sort_hide)
+                } else {
+                    stringResource(R.string.used_list_sort_show)
+                },
+                selected = showSortControls,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = if (showSortControls) {
-                        stringResource(R.string.used_list_sort_hide)
-                    } else {
-                        stringResource(R.string.used_list_sort_show)
-                    },
-                )
-            }
+                accentColor = accentColor,
+                baseColor = baseButtonColor,
+                selectedTextColor = selectedTextColor,
+                onClick = { showSortControls = !showSortControls },
+            )
 
             if (showSortControls) {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = themeColor,
+                        contentColor = themeOnColor,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -153,7 +192,7 @@ fun UsedListScreen(
                                 stringResource(sortOrder.labelResId),
                             ),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = themeOnColor.copy(alpha = 0.85f),
                         )
 
                         HorizontalDivider()
@@ -174,6 +213,9 @@ fun UsedListScreen(
                                         text = stringResource(type.labelResId),
                                         selected = sortType == type,
                                         modifier = Modifier.weight(1f),
+                                        accentColor = accentColor,
+                                        baseColor = baseButtonColor,
+                                        selectedTextColor = selectedTextColor,
                                         onClick = { sortType = type },
                                     )
                                 }
@@ -200,6 +242,9 @@ fun UsedListScreen(
                                     text = stringResource(order.labelResId),
                                     selected = sortOrder == order,
                                     modifier = Modifier.weight(1f),
+                                    accentColor = accentColor,
+                                    baseColor = baseButtonColor,
+                                    selectedTextColor = selectedTextColor,
                                     onClick = { sortOrder = order },
                                 )
                             }
@@ -236,17 +281,20 @@ private fun TabButton(
     text: String,
     selected: Boolean,
     modifier: Modifier,
+    accentColor: Color,
+    baseColor: Color,
+    selectedTextColor: Color,
     onClick: () -> Unit,
 ) {
-    if (selected) {
-        Button(onClick = onClick, modifier = modifier) {
-            Text(text = text)
-        }
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier) {
-            Text(text = text)
-        }
-    }
+    AccentButton(
+        text = text,
+        selected = selected,
+        modifier = modifier,
+        accentColor = accentColor,
+        baseColor = baseColor,
+        selectedTextColor = selectedTextColor,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -254,19 +302,65 @@ private fun SortChip(
     text: String,
     selected: Boolean,
     modifier: Modifier,
+    accentColor: Color,
+    baseColor: Color,
+    selectedTextColor: Color,
     onClick: () -> Unit,
 ) {
+    val borderColor = if (selected) selectedTextColor.copy(alpha = 0.35f) else accentColor
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(text = text) },
         modifier = modifier,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = accentColor,
+            selectedLabelColor = selectedTextColor,
+            containerColor = baseColor,
+            labelColor = accentColor,
+        ),
+        border = BorderStroke(1.dp, borderColor),
     )
 }
 
 @Composable
+private fun AccentButton(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier,
+    accentColor: Color,
+    baseColor: Color,
+    selectedTextColor: Color,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (selected) accentColor else baseColor
+    val contentColor = if (selected) selectedTextColor else accentColor
+    val borderColor = if (selected) selectedTextColor.copy(alpha = 0.35f) else accentColor
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, borderColor),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+        ),
+    ) {
+        Text(text = text, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+    }
+}
+
+@Composable
 private fun UsedRecordCard(record: ScoreRecord) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val cardBackground = LocalOshiColor.current
+    val cardContentColor = LocalOshiOnColor.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = cardBackground,
+            contentColor = cardContentColor,
+        ),
+    ) {
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),

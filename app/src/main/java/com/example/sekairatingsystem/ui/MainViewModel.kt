@@ -33,6 +33,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+enum class RateMode {
+    ALL,
+    MASTER_ONLY,
+    APPEND_ONLY,
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository(AppDatabase.getDatabase(application).appDao())
     private val masterDataInitializer = MasterDataInitializer(application.applicationContext, repository)
@@ -41,13 +47,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _userName = MutableStateFlow(preferences.getString(KEY_USER_NAME, DEFAULT_USER_NAME) ?: DEFAULT_USER_NAME)
     val userName: StateFlow<String> = _userName.asStateFlow()
 
-    private val _themeColor = MutableStateFlow(preferences.getLong(KEY_THEME_COLOR, DEFAULT_THEME_COLOR))
-    val themeColor: StateFlow<Long> = _themeColor.asStateFlow()
-
     private val _themeMode = MutableStateFlow(
         ThemeMode.fromPreference(preferences.getString(KEY_THEME_MODE, DEFAULT_THEME_MODE)),
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _rateMode = MutableStateFlow(RateMode.ALL)
+    val rateMode: StateFlow<RateMode> = _rateMode.asStateFlow()
 
     private val _oshiName = MutableStateFlow(preferences.getString(KEY_OSHI_NAME, DEFAULT_OSHI_NAME) ?: DEFAULT_OSHI_NAME)
     val oshiName: StateFlow<String> = _oshiName.asStateFlow()
@@ -86,24 +92,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList(),
         )
 
-    val bestRateSum: StateFlow<Float> = bestFrameRecords
-        .map(::sumRateValues)
+    private val rateModeRecords: StateFlow<List<ScoreRecord>> = combine(
+        repository.getCalculatedRecords(),
+        rateMode,
+    ) { records, mode ->
+        records.filter { record -> record.matchesRateMode(mode) }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
+
+    private val bestRateRecordsByMode: StateFlow<List<ScoreRecord>> = rateModeRecords
+        .map(::extractBestFrameRecords)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    private val recentRateRecordsByMode: StateFlow<List<ScoreRecord>> = rateModeRecords
+        .map(::extractRecentFrameRecords)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    val bestRateAverage: StateFlow<Float> = bestRateRecordsByMode
+        .map { records -> fixedFrameAverage(records, Constants.BEST_FRAME_SIZE) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0f,
         )
 
-    val recentRateSum: StateFlow<Float> = recentFrameRecords
-        .map(::sumRateValues)
+    val recentRateAverage: StateFlow<Float> = recentRateRecordsByMode
+        .map { records -> fixedFrameAverage(records, Constants.RECENT_FRAME_SIZE) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0f,
         )
 
-    val totalRate: StateFlow<Float> = combine(bestRateSum, recentRateSum) { best, recent ->
-        best + recent
+    val totalRate: StateFlow<Float> = combine(
+        bestRateAverage,
+        recentRateAverage,
+    ) { bestAverage, recentAverage ->
+        (bestAverage + recentAverage) / 2f
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -179,6 +215,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val databaseResetMessage: StateFlow<String?> = _databaseResetMessage.asStateFlow()
 
     private var pendingEditedSave: PendingEditedSave? = null
+
+    fun toggleRateMode() {
+        _rateMode.value = when (_rateMode.value) {
+            RateMode.ALL -> RateMode.MASTER_ONLY
+            RateMode.MASTER_ONLY -> RateMode.APPEND_ONLY
+            RateMode.APPEND_ONLY -> RateMode.ALL
+        }
+    }
 
     fun initializeMasterData() {
         if (_isInitializing.value || _isMasterDataReady.value) {
@@ -343,6 +387,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            val chartReferences = withContext(Dispatchers.IO) {
+                buildChartReferenceMap(
+                    repository.getScoreRecordsByStatusSnapshot(Constants.STATUS_CALCULATED),
+                )
+            }
+
             // --- Phase 1: OCR ---
             _isAnalyzingOcr.value = true
             _ocrProcessedCount.value = 0
@@ -370,16 +420,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     songMasters = songMasters,
                 )
 
-                if (analyzedResults.isNotEmpty()) {
-                    withContext(Dispatchers.IO) {
-                        repository.updateScoreRecords(analyzedResults.map { analyzed -> analyzed.record })
+                val adjustedResults = analyzedResults.map { analyzed ->
+                    if (!analyzed.isSuccess) {
+                        analyzed
+                    } else {
+                        val checkedRecord = applyChartConsistencyCheck(analyzed.record, chartReferences)
+                        analyzed.copy(
+                            record = checkedRecord,
+                            isSuccess = checkedRecord.status != Constants.STATUS_TRASH,
+                        )
                     }
                 }
 
-                val processedCount = analyzedResults.size
-                val failedCount = analyzedResults.count { analyzed -> !analyzed.isSuccess }
-                val unknownCount = analyzedResults.count { analyzed -> analyzed.unknownSongName != null }
-                val unknownSongNames = analyzedResults
+                if (adjustedResults.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        repository.updateScoreRecords(adjustedResults.map { analyzed -> analyzed.record })
+                    }
+                }
+
+                val processedCount = adjustedResults.size
+                val failedCount = adjustedResults.count { analyzed -> !analyzed.isSuccess }
+                val unknownCount = adjustedResults.count { analyzed -> analyzed.unknownSongName != null }
+                val unknownSongNames = adjustedResults
                     .mapNotNull { analyzed -> analyzed.unknownSongName?.trim()?.takeIf(String::isNotBlank) }
                     .filterNot { songName -> songName.equals(UNKNOWN_SONG_PLACEHOLDER, ignoreCase = true) }
                     .distinct()
@@ -430,20 +492,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) {
                     val unreadRecords = repository.getScoreRecordsByStatusSnapshot(Constants.STATUS_UNREAD)
                     val calculableRecords = unreadRecords.filter(::isReadyForRateCalculation)
-                    val skippedCount = unreadRecords.size - calculableRecords.size
+                    val checkedRecords = calculableRecords.map { record ->
+                        applyChartConsistencyCheck(record, chartReferences)
+                    }
+                    val trashedRecords = checkedRecords.filter { record -> record.status == Constants.STATUS_TRASH }
+                    if (trashedRecords.isNotEmpty()) {
+                        repository.updateScoreRecords(trashedRecords)
+                    }
 
-                    if (calculableRecords.isEmpty()) {
+                    val validRecords = checkedRecords.filter { record -> record.status != Constants.STATUS_TRASH }
+                    val skippedCount = unreadRecords.size - validRecords.size
+
+                    if (validRecords.isEmpty()) {
                         return@withContext RateCalculationSummary(0, skippedCount)
                     }
 
-                    val ratedRecords = calculableRecords.map { record ->
+                    val ratedRecords = validRecords.map { record ->
                         record.copy(singleRate = RatingCalculator.calculateSingleRate(record))
                     }
 
-                    for (ratedRecord in ratedRecords) {
-                        RatingCalculator.updateBestFrame(repository, ratedRecord)
-                        RatingCalculator.updateReservedFrame(repository, ratedRecord)
-                    }
+                    RatingCalculator.updateFramesInBatch(repository, ratedRecords)
 
                     RateCalculationSummary(ratedRecords.size, skippedCount)
                 }
@@ -496,7 +564,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun saveProfileSettings(
         userName: String,
         oshiName: String,
-        themeColor: Long,
         themeMode: ThemeMode,
     ) {
         val normalizedUserName = userName.trim()
@@ -504,13 +571,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.edit()
             .putString(KEY_USER_NAME, normalizedUserName)
             .putString(KEY_OSHI_NAME, oshiName)
-            .putLong(KEY_THEME_COLOR, themeColor)
             .putString(KEY_THEME_MODE, themeMode.name)
             .apply()
 
         _userName.value = normalizedUserName
         _oshiName.value = oshiName
-        _themeColor.value = themeColor
         _themeMode.value = themeMode
     }
 
@@ -794,6 +859,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             record.missCount != null
     }
 
+    private fun ScoreRecord.totalNotes(): Int? {
+        val perfect = perfectCount ?: return null
+        val great = greatCount ?: return null
+        val good = goodCount ?: return null
+        val bad = badCount ?: return null
+        val miss = missCount ?: return null
+        return perfect + great + good + bad + miss
+    }
+
+    private fun buildChartReferenceMap(
+        records: List<ScoreRecord>,
+        excludedRecordId: Long? = null,
+    ): Map<String, ChartReference> {
+        val sortedRecords = records
+            .asSequence()
+            .filter { record -> excludedRecordId == null || record.id != excludedRecordId }
+            .filter { record ->
+                record.status == Constants.STATUS_CALCULATED || record.isBestFrame || record.isReservedFrame
+            }
+            .sortedWith(
+                compareByDescending<ScoreRecord> { record -> record.date ?: 0L }
+                    .thenByDescending { record -> record.id },
+            )
+
+        val references = LinkedHashMap<String, ChartReference>()
+        for (record in sortedRecords) {
+            val chartKey = record.chartKey() ?: continue
+            if (references.containsKey(chartKey)) {
+                continue
+            }
+            val level = record.level ?: continue
+            val totalNotes = record.totalNotes() ?: continue
+            references[chartKey] = ChartReference(level = level, totalNotes = totalNotes)
+        }
+
+        return references
+    }
+
+    private fun applyChartConsistencyCheck(
+        record: ScoreRecord,
+        references: Map<String, ChartReference>,
+    ): ScoreRecord {
+        val chartKey = record.chartKey() ?: return record
+        val reference = references[chartKey] ?: return record
+        val totalNotes = record.totalNotes() ?: return record
+        val level = record.level ?: return record
+
+        return if (reference.totalNotes != totalNotes || reference.level != level) {
+            record.copy(
+                status = Constants.STATUS_TRASH,
+                isBestFrame = false,
+                isReservedFrame = false,
+                singleRate = null,
+            )
+        } else {
+            record
+        }
+    }
+
     private fun normalizeEditedRecord(record: ScoreRecord): ScoreRecord {
         return record.copy(
             songName = record.songName?.trim()?.takeIf(String::isNotBlank),
@@ -824,6 +948,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         if (!isReadyForRateCalculation(normalizedRecord)) {
             throw IllegalArgumentException("レート再計算に必要な項目が不足しています")
+        }
+
+        val chartReferences = buildChartReferenceMap(
+            repository.getScoreRecordsByStatusSnapshot(Constants.STATUS_CALCULATED),
+            excludedRecordId = normalizedRecord.id,
+        )
+        val checkedRecord = applyChartConsistencyCheck(normalizedRecord, chartReferences)
+        if (checkedRecord.status == Constants.STATUS_TRASH) {
+            repository.updateScoreRecord(
+                checkedRecord.copy(
+                    singleRate = null,
+                    isBestFrame = false,
+                    isReservedFrame = false,
+                ),
+            )
+            throw IllegalStateException("譜面の総ノーツ数またはレベルが過去データと一致しないため、TRASHに移動しました")
         }
 
         val recalculationBaseRecord = normalizedRecord.copy(
@@ -1049,18 +1189,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun extractRecentFrameRecords(reservedRecords: List<ScoreRecord>): List<ScoreRecord> {
-        val pickedCharts = linkedSetOf<String>()
+        val bestByChart = reservedRecords
+            .mapNotNull { record -> record.chartKey()?.let { chartKey -> chartKey to record } }
+            .groupBy({ it.first }, { it.second })
+            .mapNotNull { (_, chartRecords) ->
+                chartRecords.maxWithOrNull(
+                    compareBy<ScoreRecord> { record -> record.singleRate ?: 0f }
+                        .thenBy { record -> record.date ?: Long.MIN_VALUE }
+                        .thenBy { record -> record.id },
+                )
+            }
 
-        return reservedRecords
+        return bestByChart
             .sortedWith(
-                compareByDescending<ScoreRecord> { record -> record.date ?: 0L }
+                compareByDescending<ScoreRecord> { record -> record.singleRate ?: 0f }
+                    .thenByDescending { record -> record.level ?: 0 }
+                    .thenByDescending { record -> record.date ?: Long.MIN_VALUE }
                     .thenByDescending { record -> record.id },
             )
-            .filter { record ->
-                val chartKey = record.chartKey() ?: return@filter false
-                pickedCharts.add(chartKey)
-            }
             .take(Constants.RECENT_FRAME_SIZE)
+    }
+
+    private fun extractBestFrameRecords(records: List<ScoreRecord>): List<ScoreRecord> {
+        val bestByChart = records
+            .mapNotNull { record -> record.chartKey()?.let { chartKey -> chartKey to record } }
+            .groupBy({ it.first }, { it.second })
+            .mapNotNull { (_, chartRecords) ->
+                chartRecords.maxWithOrNull(
+                    compareBy<ScoreRecord> { record -> record.singleRate ?: 0f }
+                        .thenBy { record -> record.level ?: 0 }
+                        .thenBy { record -> record.id },
+                )
+            }
+
+        return bestByChart
+            .sortedWith(
+                compareByDescending<ScoreRecord> { record -> record.singleRate ?: 0f }
+                    .thenByDescending { record -> record.level ?: 0 }
+                    .thenBy { record -> record.id },
+            )
+            .take(Constants.BEST_FRAME_SIZE)
+    }
+
+    private fun fixedFrameAverage(records: List<ScoreRecord>, frameSize: Int): Float {
+        if (frameSize <= 0 || records.isEmpty()) {
+            return 0f
+        }
+        return sumRateValues(records) / frameSize
+    }
+
+    private fun ScoreRecord.matchesRateMode(mode: RateMode): Boolean {
+        val normalizedDifficulty = difficulty?.trim()?.uppercase(Locale.ROOT)
+        val levelValue = level ?: 0
+        val isAppendChart = normalizedDifficulty == "APPEND" ||
+            (normalizedDifficulty == "MASTER" && levelValue >= 37)
+
+        return when (mode) {
+            RateMode.ALL -> true
+            RateMode.MASTER_ONLY -> !isAppendChart
+            RateMode.APPEND_ONLY -> isAppendChart
+        }
     }
 
     private fun sumRateValues(records: List<ScoreRecord>): Float {
@@ -1076,6 +1264,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         return "$songName|$difficulty"
     }
+
+    private data class ChartReference(
+        val level: Int,
+        val totalNotes: Int,
+    )
 
     private data class OcrSummary(
         val processedCount: Int,
@@ -1141,7 +1334,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val UNKNOWN_SONG_NOTICE_NAME_LIMIT = 5
         const val PREFERENCES_NAME = "sekai_rating_settings"
         const val KEY_USER_NAME = "user_name"
-        const val KEY_THEME_COLOR = "theme_color"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_OSHI_NAME = "oshi_name"
         const val KEY_SELECTED_FOLDER_URI = "selected_folder_uri"
@@ -1152,7 +1344,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         const val DEFAULT_USER_NAME = "セカイの住人"
         const val DEFAULT_OSHI_NAME = "ミク"
-        const val DEFAULT_THEME_COLOR = 0xFF33CCBB
         const val DEFAULT_THEME_MODE = "SYSTEM"
     }
 }

@@ -9,6 +9,31 @@ object LevenshteinDistance {
         val normalizedLeft = normalize(left)
         val normalizedRight = normalize(right)
 
+        return distanceNormalized(normalizedLeft, normalizedRight)
+    }
+
+    fun similarity(left: String, right: String): Double {
+        val normalizedLeft = normalize(left)
+        val normalizedRight = normalize(right)
+
+        return similarityNormalized(normalizedLeft, normalizedRight)
+    }
+
+    fun similarityNormalized(normalizedLeft: String, normalizedRight: String): Double {
+        if (normalizedLeft.isEmpty() && normalizedRight.isEmpty()) {
+            return 1.0
+        }
+
+        val longestLength = max(normalizedLeft.length, normalizedRight.length)
+        if (longestLength == 0) {
+            return 1.0
+        }
+
+        return 1.0 - (distanceNormalized(normalizedLeft, normalizedRight).toDouble() / longestLength.toDouble())
+    }
+
+    private fun distanceNormalized(normalizedLeft: String, normalizedRight: String): Int {
+
         if (normalizedLeft.isEmpty()) {
             return normalizedRight.length
         }
@@ -40,22 +65,6 @@ object LevenshteinDistance {
         }
 
         return previous[normalizedRight.length]
-    }
-
-    fun similarity(left: String, right: String): Double {
-        val normalizedLeft = normalize(left)
-        val normalizedRight = normalize(right)
-
-        if (normalizedLeft.isEmpty() && normalizedRight.isEmpty()) {
-            return 1.0
-        }
-
-        val longestLength = max(normalizedLeft.length, normalizedRight.length)
-        if (longestLength == 0) {
-            return 1.0
-        }
-
-        return 1.0 - (distance(normalizedLeft, normalizedRight).toDouble() / longestLength.toDouble())
     }
 
     fun normalize(text: String): String {

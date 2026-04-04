@@ -27,7 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.sekairatingsystem.R
 import com.example.sekairatingsystem.data.entity.ScoreRecord
+import com.example.sekairatingsystem.ui.theme.LocalOshiColor
+import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -67,6 +69,8 @@ fun EditScoreScreen(
     val isOperationInProgress = isSaving || isDeletingImage
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showCannotDeleteDialog by remember { mutableStateOf(false) }
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
 
     Scaffold(
         topBar = {
@@ -80,6 +84,12 @@ fun EditScoreScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = themeColor,
+                    titleContentColor = themeOnColor,
+                    navigationIconContentColor = themeOnColor,
+                    actionIconContentColor = themeOnColor,
+                ),
             )
         },
     ) { innerPadding ->
@@ -193,7 +203,6 @@ fun EditScoreScreen(
         var goodCount by remember(currentRecord) { mutableStateOf(currentRecord.goodCount?.toString().orEmpty()) }
         var badCount by remember(currentRecord) { mutableStateOf(currentRecord.badCount?.toString().orEmpty()) }
         var missCount by remember(currentRecord) { mutableStateOf(currentRecord.missCount?.toString().orEmpty()) }
-        var isAllPerfect by remember(currentRecord) { mutableStateOf(currentRecord.isAllPerfect == true) }
 
         Column(
             modifier = Modifier
@@ -266,34 +275,36 @@ fun EditScoreScreen(
             NumericField(value = badCount, onValueChange = { badCount = it }, label = "BAD")
             NumericField(value = missCount, onValueChange = { missCount = it }, label = "MISS")
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Checkbox(
-                    checked = isAllPerfect,
-                    onCheckedChange = { checked -> isAllPerfect = checked },
-                )
-                Text(
-                    text = stringResource(R.string.edit_score_all_perfect),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-
             Button(
                 onClick = {
+                    val normalizedPerfect = perfectCount.toNullableInt()
+                    val normalizedGreat = greatCount.toNullableInt()
+                    val normalizedGood = goodCount.toNullableInt()
+                    val normalizedBad = badCount.toNullableInt()
+                    val normalizedMiss = missCount.toNullableInt()
+                    val hasAllCounts = listOf(
+                        normalizedPerfect,
+                        normalizedGreat,
+                        normalizedGood,
+                        normalizedBad,
+                        normalizedMiss,
+                    ).all { value -> value != null }
+                    val resolvedIsAllPerfect = if (hasAllCounts) {
+                        normalizedGreat == 0 && normalizedGood == 0 && normalizedBad == 0 && normalizedMiss == 0
+                    } else {
+                        currentRecord.isAllPerfect
+                    }
                     viewModel.saveEditedScoreRecord(
                         record = currentRecord.copy(
                             songName = songName.toNullableText(),
                             difficulty = difficulty.toNullableText(),
                             level = level.toNullableInt(),
-                            perfectCount = perfectCount.toNullableInt(),
-                            greatCount = greatCount.toNullableInt(),
-                            goodCount = goodCount.toNullableInt(),
-                            badCount = badCount.toNullableInt(),
-                            missCount = missCount.toNullableInt(),
-                            isAllPerfect = isAllPerfect,
+                            perfectCount = normalizedPerfect,
+                            greatCount = normalizedGreat,
+                            goodCount = normalizedGood,
+                            badCount = normalizedBad,
+                            missCount = normalizedMiss,
+                            isAllPerfect = resolvedIsAllPerfect,
                         ),
                         onSaved = {
                             Toast.makeText(context, recalcToastMessage, Toast.LENGTH_SHORT).show()

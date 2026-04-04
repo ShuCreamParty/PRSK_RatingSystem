@@ -10,6 +10,9 @@ import androidx.room.PrimaryKey
         Index(value = ["imageUri"]),
         Index(value = ["status"]),
         Index(value = ["songName", "difficulty"]),
+        Index(value = ["isBestFrame", "singleRate", "id"]),
+        Index(value = ["isReservedFrame", "date", "id"]),
+        Index(value = ["songName", "difficulty", "singleRate"]),
     ],
 )
 data class ScoreRecord(

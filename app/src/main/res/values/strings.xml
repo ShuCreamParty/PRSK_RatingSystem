@@ -10,10 +10,6 @@
     <string name="menu_settings">設定</string>
     <string name="main_header_rating">%1$s</string>
     <string name="main_header_rating_default">あなたのレート</string>
-    <string name="main_status_title">ステータス</string>
-    <string name="main_status_initializing">必要データを初期化中...</string>
-    <string name="main_status_ready">必要データの準備完了</string>
-    <string name="main_status_ocr_summary">スコア読み込み済み: %1$d 件 / 失敗: %2$d 件</string>
     <string name="main_unknown_song_dialog_title">未登録の楽曲を検出しました</string>
     <string name="main_unknown_song_dialog_message">OCRで未登録と思われる楽曲が %1$d 件見つかりました。該当データは読取失敗に移動しています。手動編集で曲名を確定してください。</string>
     <string name="main_unknown_song_dialog_names">候補:
@@ -22,22 +18,23 @@
     <string name="main_unknown_song_dialog_close">閉じる</string>
     <string name="btn_start_calc">レート算出</string>
     <string name="btn_processing">処理中...</string>
-    <string name="btn_calc_short">CALC</string>
     <string name="msg_require_folder">画像フォルダを設定してください</string>
     <string name="btn_select_folder">フォルダを選択</string>
     <string name="main_total_play_count">総プレイ回数</string>
     <string name="main_total_play_count_value">%1$d 回</string>
     <string name="main_oshi_label">推しキャラ</string>
+    <string name="main_rate_mode_all">対象: すべて</string>
+    <string name="main_rate_mode_master">対象: MASTERまで</string>
+    <string name="main_rate_mode_append">対象: APPEND</string>
     <string name="cd_open_menu">メニューを開く</string>
+    <string name="cd_toggle_rate_mode">対象譜面を切り替える</string>
     <string name="cd_back">戻る</string>
 
     <string name="settings_title">設定</string>
     <string name="settings_profile_title">プロフィール設定</string>
     <string name="settings_profile_save">変更を保存</string>
     <string name="settings_profile_saved_toast">プロフィール設定を保存しました</string>
-    <string name="settings_user_name_title">ユーザー名設定</string>
     <string name="settings_user_name_label">ユーザー名</string>
-    <string name="settings_user_name_btn">保存</string>
     <string name="settings_theme_mode_title">テーマ</string>
     <string name="settings_theme_mode_system">デバイスの既定</string>
     <string name="settings_theme_mode_light">ライトモード</string>
@@ -66,7 +63,6 @@
     <string name="settings_db_reset_confirm_yes">実行する</string>
     <string name="settings_db_reset_confirm_no">キャンセル</string>
     <string name="settings_oshi_title">推しキャラ設定</string>
-    <string name="settings_oshi_desc">アプリテーマがキャラクターの色に変わります</string>
     <string name="settings_current_oshi">現在選択中: %1$s</string>
 
     <string name="edit_score_image_preview">スコア画像プレビュー</string>
@@ -77,7 +73,6 @@
     <string name="edit_score_difficulty">難易度</string>
     <string name="edit_score_difficulty_hint">EASY / NORMAL / HARD / EXPERT / MASTER / APPEND</string>
     <string name="edit_score_level">レベル</string>
-    <string name="edit_score_all_perfect">ALL PERFECT</string>
     <string name="edit_score_save_recalculate">保存してレートを再計算する</string>
     <string name="edit_score_save_recalculate_loading">保存して再計算中...</string>
     <string name="edit_score_recalculate_done">レートを再計算しました</string>

@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,7 +53,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
@@ -61,6 +62,7 @@ import com.example.sekairatingsystem.Constants
 import com.example.sekairatingsystem.R
 import com.example.sekairatingsystem.ui.theme.LocalIsDarkTheme
 import com.example.sekairatingsystem.ui.theme.LocalOshiColor
+import com.example.sekairatingsystem.ui.theme.LocalOshiOnColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,9 +92,22 @@ fun SettingsScreen(
     var showDatabaseResetConfirmDialog by remember { mutableStateOf(false) }
 
     val selectedThemeMode = ThemeMode.fromPreference(selectedThemeModeName)
-    val selectedOshiColor = colorResource(id = resolveOshiColorRes(selectedOshiName))
-    val oshiColor = LocalOshiColor.current
+    val themeOptions = listOf(
+        ThemeOption(ThemeMode.SYSTEM, stringResource(R.string.settings_theme_mode_system)),
+        ThemeOption(ThemeMode.LIGHT, stringResource(R.string.settings_theme_mode_light)),
+        ThemeOption(ThemeMode.DARK, stringResource(R.string.settings_theme_mode_dark)),
+        ThemeOption(ThemeMode.VIRTUAL_SINGER, "VIRTUAL SINGER"),
+        ThemeOption(ThemeMode.LEO_NEED, "Leo/need"),
+        ThemeOption(ThemeMode.MORE_MORE_JUMP, "MORE MORE JUMP!"),
+        ThemeOption(ThemeMode.VIVID_BAD_SQUAD, "Vivid BAD SQUAD"),
+        ThemeOption(ThemeMode.WONDERLANDS_SHOWTIME, "ワンダーランズ×ショウタイム"),
+        ThemeOption(ThemeMode.NIGHTCORD, "25時、ナイトコードで。"),
+    )
+    val themeColor = LocalOshiColor.current
+    val themeOnColor = LocalOshiOnColor.current
     val isDarkTheme = LocalIsDarkTheme.current
+    val cardBackground = themeColor
+    val cardContentColor = themeOnColor
     val profileSavedToast = stringResource(R.string.settings_profile_saved_toast)
     val hasPendingChanges = editableUserName.trim() != userName ||
         selectedOshiName != oshiName ||
@@ -203,6 +218,12 @@ fun SettingsScreen(
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = themeColor,
+                    titleContentColor = themeOnColor,
+                    navigationIconContentColor = themeOnColor,
+                    actionIconContentColor = themeOnColor,
+                ),
             )
         },
     ) { padding ->
@@ -214,7 +235,13 @@ fun SettingsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
         ) {
             item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -238,24 +265,24 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        ThemeMode.values().forEach { mode ->
-                            val isSelected = selectedThemeMode == mode
+                        themeOptions.forEach { option ->
+                            val isSelected = selectedThemeMode == option.mode
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedThemeModeName = mode.name },
+                                    .clickable { selectedThemeModeName = option.mode.name },
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(
                                     selected = isSelected,
-                                    onClick = { selectedThemeModeName = mode.name },
+                                    onClick = { selectedThemeModeName = option.mode.name },
                                     colors = RadioButtonDefaults.colors(
-                                        selectedColor = oshiColor,
-                                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        selectedColor = themeOnColor,
+                                        unselectedColor = themeOnColor.copy(alpha = 0.6f),
                                     ),
                                 )
                                 Text(
-                                    text = stringResource(themeModeLabelRes(mode)),
+                                    text = option.label,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
@@ -271,12 +298,12 @@ fun SettingsScreen(
                         Text(
                             text = stringResource(R.string.settings_current_oshi, selectedOshiName),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = themeOnColor.copy(alpha = 0.75f),
                         )
 
                         OSHI_UNITS.forEach { (unitName, characters) ->
                             val unitColor = when (unitName) {
-                                "VIRTUAL SINGER" -> if (isDarkTheme) Color(0xFFFFFFFF) else Color(0xFF000000)
+                                "VIRTUAL SINGER" -> if (isDarkTheme) Color(0xFFF2F9FF) else Color(0xFF000000)
                                 "Leo/need" -> Color(0xFF4455DD)
                                 "MORE MORE JUMP!" -> Color(0xFF88DD44)
                                 "Vivid BAD SQUAD" -> Color(0xFFEE1166)
@@ -314,7 +341,7 @@ fun SettingsScreen(
                                                 .background(oshiColor)
                                                 .border(
                                                     width = if (isSelected) 4.dp else 1.dp,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                                    color = if (isSelected) themeOnColor else MaterialTheme.colorScheme.outline,
                                                     shape = CircleShape,
                                                 ),
                                         )
@@ -334,7 +361,6 @@ fun SettingsScreen(
                                 viewModel.saveProfileSettings(
                                     userName = editableUserName,
                                     oshiName = selectedOshiName,
-                                    themeColor = selectedOshiColor.toArgb().toLong(),
                                     themeMode = selectedThemeMode,
                                 )
                                 Toast.makeText(
@@ -353,7 +379,13 @@ fun SettingsScreen(
             }
 
             item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -410,7 +442,13 @@ fun SettingsScreen(
             }
 
             item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -452,7 +490,13 @@ fun SettingsScreen(
             }
 
             item {
-                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = cardBackground,
+                        contentColor = cardContentColor,
+                    ),
+                ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -485,10 +529,7 @@ fun SettingsScreen(
     }
 }
 
-private fun themeModeLabelRes(mode: ThemeMode): Int {
-    return when (mode) {
-        ThemeMode.SYSTEM -> R.string.settings_theme_mode_system
-        ThemeMode.LIGHT -> R.string.settings_theme_mode_light
-        ThemeMode.DARK -> R.string.settings_theme_mode_dark
-    }
-}
+private data class ThemeOption(
+    val mode: ThemeMode,
+    val label: String,
+)

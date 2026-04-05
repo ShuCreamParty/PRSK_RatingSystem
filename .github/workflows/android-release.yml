@@ -25,20 +25,28 @@ jobs:
           cache: gradle
 
       - name: Prepare signing files (optional)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" ]]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
             cat <<EOF > keystore.properties
             storeFile=app/release.keystore
-            storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-            keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-            keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+            storePassword=$ANDROID_KEYSTORE_PASSWORD
+            keyAlias=$ANDROID_KEY_ALIAS
+            keyPassword=$ANDROID_KEY_PASSWORD
             EOF
             echo "Release keystore configured."
           else
             echo "No release keystore secret found. Falling back to debug signing."
           fi
+
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
 
       - name: Build release APK
         run: ./gradlew assembleRelease

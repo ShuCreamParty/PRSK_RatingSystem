@@ -33,14 +33,18 @@ jobs:
         shell: bash
         run: |
           if [[ -n "$ANDROID_KEYSTORE_BASE64" ]]; then
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
-            cat <<EOF > keystore.properties
-            storeFile=app/release.keystore
-            storePassword=$ANDROID_KEYSTORE_PASSWORD
-            keyAlias=$ANDROID_KEY_ALIAS
-            keyPassword=$ANDROID_KEY_PASSWORD
-            EOF
-            echo "Release keystore configured."
+            if printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release.keystore 2>/dev/null; then
+              {
+                echo "storeFile=app/release.keystore"
+                printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
+                printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+                printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+              } > keystore.properties
+              echo "Release keystore configured."
+            else
+              echo "Invalid keystore secret. Falling back to debug signing."
+              rm -f app/release.keystore keystore.properties
+            fi
           else
             echo "No release keystore secret found. Falling back to debug signing."
           fi

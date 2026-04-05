@@ -7,7 +7,7 @@ object Constants {
     const val STATUS_TRASH = "TRASH"
     const val STATUS_MEDIA_DELETED = "MEDIA_DELETED"
 
-    const val BEST_FRAME_SIZE = 30
+    const val BEST_FRAME_SIZE = 15
     const val RESERVE_FRAME_SIZE = 30
     const val RECENT_FRAME_SIZE = 10
 }

@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.sekairatingsystem.BuildConfig
 import com.example.sekairatingsystem.R
 import com.example.sekairatingsystem.ui.theme.CardDark
 import com.example.sekairatingsystem.ui.theme.CardLight
@@ -93,6 +94,7 @@ fun MainScreen(
         RateMode.MASTER_ONLY -> stringResource(R.string.main_rate_mode_master)
         RateMode.APPEND_ONLY -> stringResource(R.string.main_rate_mode_append)
     }
+    val versionText = stringResource(R.string.main_app_version, BuildConfig.VERSION_NAME)
 
     val labelFontSize = 14.sp
     val valueFontSize = 20.sp
@@ -107,7 +109,7 @@ fun MainScreen(
         }
     }
 
-    val ratingStyle = getArcaeaRatingStyle(totalRate)
+    val ratingStyle = getRatingCardStyle(totalRate, rateMode)
 
     unknownSongNotice?.let { notice ->
         AlertDialog(
@@ -178,254 +180,268 @@ fun MainScreen(
             )
         },
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(innerPadding),
         ) {
-            // Profile & Rating Header
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .shadow(18.dp, RoundedCornerShape(24.dp), spotColor = ratingStyle.glowColor)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(ratingStyle.background)
-                    .border(2.dp, ratingStyle.frameColor, RoundedCornerShape(24.dp)),
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                // Profile & Rating Header
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(ratingStyle.gloss),
-                )
-
-                IconButton(
-                    onClick = { viewModel.toggleRateMode() },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.SwapHoriz,
-                        contentDescription = stringResource(R.string.cd_toggle_rate_mode),
-                        tint = ratingStyle.labelColor,
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = if (userName.isBlank()) stringResource(R.string.main_header_rating_default) else stringResource(R.string.main_header_rating, userName),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = ratingStyle.labelColor,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-
-                    Text(
-                        text = stringResource(R.string.title_total_rate),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = ratingStyle.labelColor.copy(alpha = 0.9f),
-                    )
-
-                    Text(
-                        text = modeLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ratingStyle.labelColor.copy(alpha = 0.78f),
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Text(
-                        text = String.format(Locale.JAPAN, "%.2f", totalRate),
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 64.sp,
-                        ),
-                        color = ratingStyle.valueColor,
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(R.string.title_best30),
-                                color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = labelFontSize,
-                            )
-                            Text(
-                                text = String.format(Locale.JAPAN, "%.2f", bestRateAverage),
-                                color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = valueFontSize,
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(R.string.title_recent10),
-                                color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = labelFontSize,
-                            )
-                            Text(
-                                text = String.format(Locale.JAPAN, "%.2f", recentRateAverage),
-                                color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = valueFontSize,
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(R.string.main_total_play_count),
-                                color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = labelFontSize,
-                            )
-                            Text(
-                                text = stringResource(R.string.main_total_play_count_value, totalPlayCount),
-                                color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = valueFontSize,
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(R.string.main_oshi_label),
-                                color = ratingStyle.labelColor.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = labelFontSize,
-                            )
-                            Text(
-                                text = oshiName,
-                                color = ratingStyle.valueColor,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = valueFontSize,
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            val isBusy = isInitializing || isScanningFolder || isAnalyzingOcr || isCalculatingRates
-
-            if (selectedFolderUri == null) {
-                ElevatedCard(
-                    modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = cardBackground,
-                        contentColor = cardContentColor,
-                    ),
+                        .padding(16.dp)
+                        .shadow(18.dp, RoundedCornerShape(24.dp), spotColor = ratingStyle.glowColor)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(ratingStyle.background)
+                        .border(2.dp, ratingStyle.frameColor, RoundedCornerShape(24.dp)),
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(ratingStyle.gloss),
+                    )
+
+                    IconButton(
+                        onClick = { viewModel.toggleRateMode() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.SwapHoriz,
+                            contentDescription = stringResource(R.string.cd_toggle_rate_mode),
+                            tint = ratingStyle.labelColor,
+                        )
+                    }
+
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = stringResource(R.string.msg_require_folder),
+                            text = if (userName.isBlank()) stringResource(R.string.main_header_rating_default) else stringResource(R.string.main_header_rating, userName),
                             style = MaterialTheme.typography.titleMedium,
+                            color = ratingStyle.labelColor,
+                            modifier = Modifier.padding(bottom = 8.dp),
                         )
-                        Button(
-                            onClick = { folderPickerLauncher.launch(null) },
-                            enabled = !isInitializing && !isScanningFolder,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = surfaceBackground,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                disabledContainerColor = surfaceBackground.copy(alpha = 0.6f),
-                                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+
+                        Text(
+                            text = stringResource(R.string.title_total_rate),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = ratingStyle.labelColor.copy(alpha = 0.9f),
+                        )
+
+                        Text(
+                            text = modeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ratingStyle.labelColor.copy(alpha = 0.78f),
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = String.format(Locale.JAPAN, "%.2f", totalRate),
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 64.sp,
                             ),
+                            color = ratingStyle.valueColor,
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
                         ) {
-                            Text(text = stringResource(R.string.btn_select_folder))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.title_best30),
+                                    color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = labelFontSize,
+                                )
+                                Text(
+                                    text = String.format(Locale.JAPAN, "%.2f", bestRateAverage),
+                                    color = ratingStyle.valueColor,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = valueFontSize,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.title_recent10),
+                                    color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = labelFontSize,
+                                )
+                                Text(
+                                    text = String.format(Locale.JAPAN, "%.2f", recentRateAverage),
+                                    color = ratingStyle.valueColor,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = valueFontSize,
+                                )
+                            }
                         }
-                        if (isScanningFolder) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.main_total_play_count),
+                                    color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = labelFontSize,
+                                )
+                                Text(
+                                    text = stringResource(R.string.main_total_play_count_value, totalPlayCount),
+                                    color = ratingStyle.valueColor,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = valueFontSize,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = stringResource(R.string.main_oshi_label),
+                                    color = ratingStyle.labelColor.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = labelFontSize,
+                                )
+                                Text(
+                                    text = oshiName,
+                                    color = ratingStyle.valueColor,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = valueFontSize,
+                                )
+                            }
                         }
                     }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
-            } else {
-                ElevatedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = cardBackground,
-                        contentColor = cardContentColor,
-                    ),
-                ) {
-                    Button(
-                        onClick = { viewModel.processAllUnreadData(context) },
-                        enabled = !isBusy,
+
+                val isBusy = isInitializing || isScanningFolder || isAnalyzingOcr || isCalculatingRates
+
+                if (selectedFolderUri == null) {
+                    ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(76.dp),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = themeColor,
-                            contentColor = themeOnColor,
-                            disabledContainerColor = themeColor.copy(alpha = 0.5f),
-                            disabledContentColor = themeOnColor.copy(alpha = 0.6f),
+                            .padding(horizontal = 16.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = cardBackground,
+                            contentColor = cardContentColor,
                         ),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
                     ) {
-                        if (isBusy) {
-                            CircularProgressIndicator(
-                                color = themeOnColor,
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 3.dp,
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
                             Text(
-                                text = stringResource(R.string.btn_processing),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = stringResource(R.string.msg_require_folder),
+                                style = MaterialTheme.typography.titleMedium,
                             )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = stringResource(R.string.btn_start_calc),
-                                modifier = Modifier.size(30.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.btn_start_calc),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                            )
+                            Button(
+                                onClick = { folderPickerLauncher.launch(null) },
+                                enabled = !isInitializing && !isScanningFolder,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(64.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = surfaceBackground,
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledContainerColor = surfaceBackground.copy(alpha = 0.6f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                ),
+                            ) {
+                                Text(text = stringResource(R.string.btn_select_folder))
+                            }
+                            if (isScanningFolder) {
+                                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = cardBackground,
+                            contentColor = cardContentColor,
+                        ),
+                    ) {
+                        Button(
+                            onClick = { viewModel.processAllUnreadData(context) },
+                            enabled = !isBusy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(76.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = themeColor,
+                                contentColor = themeOnColor,
+                                disabledContainerColor = themeColor.copy(alpha = 0.5f),
+                                disabledContentColor = themeOnColor.copy(alpha = 0.6f),
+                            ),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                        ) {
+                            if (isBusy) {
+                                CircularProgressIndicator(
+                                    color = themeOnColor,
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 3.dp,
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = stringResource(R.string.btn_processing),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = stringResource(R.string.btn_start_calc),
+                                    modifier = Modifier.size(30.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.btn_start_calc),
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                )
+                            }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = versionText,
+                style = MaterialTheme.typography.labelSmall,
+                color = ratingStyle.labelColor.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 10.dp),
+            )
         }
     }
 }
 
-private data class ArcaeaRatingStyle(
+private data class RatingCardStyle(
     val background: Brush,
     val gloss: Brush,
     val frameColor: Color,
@@ -434,7 +450,9 @@ private data class ArcaeaRatingStyle(
     val labelColor: Color,
 )
 
-private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
+private fun getRatingCardStyle(rate: Float, rateMode: RateMode): RatingCardStyle {
+    val masterOnlyMode = rateMode == RateMode.MASTER_ONLY
+
     return when {
         rate <= 0f -> flatStyleOf(
             background = Color(0xFF8C8C8C),
@@ -443,8 +461,29 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             value = Color(0xFFF3F3F3),
             label = Color(0xFFE4E4E4),
         )
-        rate >= 1300f -> {
-            ArcaeaRatingStyle(
+        rate >= 38f && !masterOnlyMode -> {
+            RatingCardStyle(
+                background = Brush.linearGradient(
+                    listOf(
+                        Color(0xFFFF5DAA),
+                        Color(0xFFFF8C42),
+                        Color(0xFFFFE45E),
+                        Color(0xFF47D16C),
+                        Color(0xFF3CA8FF),
+                        Color(0xFFA56BFF),
+                    ),
+                ),
+                gloss = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.24f), Color.Transparent),
+                ),
+                frameColor = Color(0xFFF8FAFF),
+                glowColor = Color(0xFFFF7CCB),
+                valueColor = Color(0xFFFFFFFF),
+                labelColor = Color(0xFFF7F9FF),
+            )
+        }
+        rate >= 36f && masterOnlyMode -> {
+            RatingCardStyle(
                 background = Brush.linearGradient(
                     listOf(
                         Color(0xFFFF5DAA),
@@ -465,8 +504,22 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             )
         }
 
-        rate >= 1200f -> {
-            ArcaeaRatingStyle(
+        rate >= 35f && !masterOnlyMode -> {
+            RatingCardStyle(
+                background = Brush.linearGradient(
+                    listOf(Color(0xFF6E4D00), Color(0xFFB8890A), Color(0xFFF3D46E), Color(0xFF8C5E00)),
+                ),
+                gloss = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.36f), Color.Transparent),
+                ),
+                frameColor = Color(0xFFFCEAA2),
+                glowColor = Color(0xFFFFC947),
+                valueColor = Color(0xFF1B1300),
+                labelColor = Color(0xFF2D2200),
+            )
+        }
+        rate >= 34f && masterOnlyMode -> {
+            RatingCardStyle(
                 background = Brush.linearGradient(
                     listOf(Color(0xFF6E4D00), Color(0xFFB8890A), Color(0xFFF3D46E), Color(0xFF8C5E00)),
                 ),
@@ -480,8 +533,22 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             )
         }
 
-        rate >= 1100f -> {
-            ArcaeaRatingStyle(
+        rate >= 33f && !masterOnlyMode -> {
+            RatingCardStyle(
+                background = Brush.linearGradient(
+                    listOf(Color(0xFF5A616A), Color(0xFFBFC6D1), Color(0xFFE9EDF4), Color(0xFF656B73)),
+                ),
+                gloss = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.35f), Color.Transparent),
+                ),
+                frameColor = Color(0xFFE9EEF8),
+                glowColor = Color(0xFFC6CEDA),
+                valueColor = Color(0xFF1D2025),
+                labelColor = Color(0xFF2E3339),
+            )
+        }
+        rate >= 32f && masterOnlyMode -> {
+            RatingCardStyle(
                 background = Brush.linearGradient(
                     listOf(Color(0xFF5A616A), Color(0xFFBFC6D1), Color(0xFFE9EDF4), Color(0xFF656B73)),
                 ),
@@ -495,8 +562,8 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             )
         }
 
-        rate >= 1000f -> {
-            ArcaeaRatingStyle(
+        rate >= 30f -> {
+            RatingCardStyle(
                 background = Brush.linearGradient(
                     listOf(Color(0xFF4D2D17), Color(0xFF9E6338), Color(0xFFE5B07E), Color(0xFF6E3F1F)),
                 ),
@@ -510,7 +577,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             )
         }
 
-        rate >= 800f -> flatStyleOf(
+        rate >= 25f -> flatStyleOf(
             background = Color(0xFFC83145),
             frame = Color(0xFFFF7B8B),
             glow = Color(0xFFEA4A61),
@@ -518,7 +585,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             label = Color(0xFFFFE6E9),
         )
 
-        rate >= 600f -> flatStyleOf(
+        rate >= 20f -> flatStyleOf(
             background = Color(0xFFD87721),
             frame = Color(0xFFFFB877),
             glow = Color(0xFFE38A32),
@@ -526,7 +593,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             label = Color(0xFFFFE6CC),
         )
 
-        rate >= 400f -> flatStyleOf(
+        rate >= 16f -> flatStyleOf(
             background = Color(0xFF7B43D6),
             frame = Color(0xFFC9A7FF),
             glow = Color(0xFF9967F1),
@@ -534,7 +601,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             label = Color(0xFFE9DDFF),
         )
 
-        rate >= 250f -> flatStyleOf(
+        rate >= 12f -> flatStyleOf(
             background = Color(0xFF3AAA64),
             frame = Color(0xFFA9F1C2),
             glow = Color(0xFF56D988),
@@ -542,7 +609,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             label = Color(0xFFDDFBE9),
         )
 
-        rate >= 150f -> flatStyleOf(
+        rate >= 8f -> flatStyleOf(
             background = Color(0xFFDDC433),
             frame = Color(0xFFFFF08A),
             glow = Color(0xFFE7CF47),
@@ -550,7 +617,7 @@ private fun getArcaeaRatingStyle(rate: Float): ArcaeaRatingStyle {
             label = Color(0xFF403700),
         )
 
-        rate >= 50f -> flatStyleOf(
+        rate >= 4f -> flatStyleOf(
             background = Color(0xFF41B5E8),
             frame = Color(0xFF98E4FF),
             glow = Color(0xFF58C8F4),
@@ -574,8 +641,8 @@ private fun flatStyleOf(
     glow: Color,
     value: Color,
     label: Color,
-): ArcaeaRatingStyle {
-    return ArcaeaRatingStyle(
+): RatingCardStyle {
+    return RatingCardStyle(
         background = SolidColor(background),
         gloss = SolidColor(Color.Transparent),
         frameColor = frame,

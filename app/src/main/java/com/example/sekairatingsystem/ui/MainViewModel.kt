@@ -111,6 +111,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList(),
         )
 
+    val usedListBestRecordsByMode: StateFlow<List<ScoreRecord>> = bestRateRecordsByMode
+
     private val recentRateRecordsByMode: StateFlow<List<ScoreRecord>> = rateModeRecords
         .map(::extractRecentFrameRecords)
         .stateIn(
@@ -118,6 +120,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    val usedListRecentRecordsByMode: StateFlow<List<ScoreRecord>> = recentRateRecordsByMode
 
     val bestRateAverage: StateFlow<Float> = bestRateRecordsByMode
         .map { records -> fixedFrameAverage(records, Constants.BEST_FRAME_SIZE) }
@@ -680,7 +684,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val targetRecord = repository.getScoreRecordByIdSnapshot(recordId)
                     ?: throw IllegalArgumentException("削除対象のレコードが見つかりません")
 
-                if (isRecordProtectedForImageDeletion(targetRecord)) {
+                val protectedRecordIds = getProtectedRecordIdsAcrossRateModes()
+
+                if (isRecordProtectedForImageDeletion(targetRecord, protectedRecordIds)) {
                     throw IllegalStateException("この画像は現在のレート計算に使用中のため削除できません")
                 }
 
@@ -740,9 +746,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     var deletedCount = 0
                     var failedCount = 0
                     var blockedCount = 0
+                    val protectedRecordIds = getProtectedRecordIdsAcrossRateModes()
 
                     for (record in trashRecords) {
-                        if (isRecordProtectedForImageDeletion(record)) {
+                        if (isRecordProtectedForImageDeletion(record, protectedRecordIds)) {
                             blockedCount += 1
                             continue
                         }
@@ -1325,8 +1332,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         WAITING_LEVEL_SELECTION,
     }
 
-    private fun isRecordProtectedForImageDeletion(record: ScoreRecord): Boolean {
-        return record.isBestFrame || record.isReservedFrame
+    private suspend fun getProtectedRecordIdsAcrossRateModes(): Set<Long> {
+        val activeRecords = repository.getAllScoreRecordsSnapshot().filter { record ->
+            record.status == Constants.STATUS_CALCULATED || record.isBestFrame || record.isReservedFrame
+        }
+
+        if (activeRecords.isEmpty()) {
+            return emptySet()
+        }
+
+        val protectedRecordIds = mutableSetOf<Long>()
+        for (mode in RateMode.entries) {
+            val modeRecords = activeRecords.filter { record -> record.matchesRateMode(mode) }
+            extractBestFrameRecords(modeRecords).forEach { record -> protectedRecordIds += record.id }
+            extractRecentFrameRecords(modeRecords).forEach { record -> protectedRecordIds += record.id }
+        }
+
+        return protectedRecordIds
+    }
+
+    private fun isRecordProtectedForImageDeletion(
+        record: ScoreRecord,
+        protectedRecordIds: Set<Long>,
+    ): Boolean {
+        return record.id in protectedRecordIds
     }
 
     private companion object {

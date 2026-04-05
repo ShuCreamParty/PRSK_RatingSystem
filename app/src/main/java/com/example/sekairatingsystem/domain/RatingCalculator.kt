@@ -44,6 +44,8 @@ object RatingCalculator {
         )
         val updatesById = LinkedHashMap<Long, ScoreRecord>()
 
+        trimBestFrameOverflow(state, updatesById)
+
         for (ratedRecord in ratedRecords) {
             val mergedRecord = mergeWithPersistedRecord(
                 persistedRecord = state.recordsById[ratedRecord.id],
@@ -68,7 +70,9 @@ object RatingCalculator {
             return
         }
 
-        val bestRecords = repository.getBestFrameRecordsSnapshot()
+        val bestRecords = repository.getBestFrameRecordsSnapshot().toMutableList()
+        trimBestFrameOverflow(repository, bestRecords)
+
         val existingBestForSameChart = bestRecords.firstOrNull { record ->
             record.songName == songName && record.difficulty == difficulty
         }
@@ -442,6 +446,45 @@ object RatingCalculator {
         if (updatedRecord.isReservedFrame) {
             state.reservedRecords.add(updatedRecord)
         }
+    }
+
+    private suspend fun trimBestFrameOverflow(
+        repository: AppRepository,
+        bestRecords: MutableList<ScoreRecord>,
+    ) {
+        val overflowRecords = bestRecords.bestFrameOverflowRecords()
+        if (overflowRecords.isEmpty()) {
+            return
+        }
+
+        overflowRecords.forEach { overflowRecord ->
+            repository.updateScoreRecord(overflowRecord.withFrameMembership(isBestFrame = false))
+            bestRecords.removeAll { record -> record.id == overflowRecord.id }
+        }
+    }
+
+    private fun trimBestFrameOverflow(
+        state: FrameUpdateState,
+        updatesById: MutableMap<Long, ScoreRecord>,
+    ) {
+        state.bestRecords.bestFrameOverflowRecords().forEach { overflowRecord ->
+            applyRecordUpdate(
+                state,
+                updatesById,
+                overflowRecord.withFrameMembership(isBestFrame = false),
+            )
+        }
+    }
+
+    private fun List<ScoreRecord>.bestFrameOverflowRecords(): List<ScoreRecord> {
+        if (size <= Constants.BEST_FRAME_SIZE) {
+            return emptyList()
+        }
+
+        return sortedWith(
+            compareBy<ScoreRecord> { record -> record.rateValue() }
+                .thenBy { record -> record.id },
+        ).take(size - Constants.BEST_FRAME_SIZE)
     }
 
     private suspend fun handleSpecialReservedUpdate(

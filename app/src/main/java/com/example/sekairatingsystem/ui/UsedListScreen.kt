@@ -78,8 +78,9 @@ fun UsedListScreen(
     viewModel: MainViewModel,
     onOpenDrawer: () -> Unit,
 ) {
-    val bestFrameRecords by viewModel.bestFrameRecords.collectAsState()
-    val recentFrameRecords by viewModel.recentFrameRecords.collectAsState()
+    val bestFrameRecords by viewModel.usedListBestRecordsByMode.collectAsState()
+    val recentFrameRecords by viewModel.usedListRecentRecordsByMode.collectAsState()
+    val rateMode by viewModel.rateMode.collectAsState()
     val oshiName by viewModel.oshiName.collectAsState()
 
     var selectedTab by rememberSaveable { mutableStateOf(UsedListTab.BEST) }
@@ -93,6 +94,11 @@ fun UsedListScreen(
     val accentColor = colorResource(id = resolveOshiColorRes(oshiName))
     val baseButtonColor = surfaceBackground
     val selectedTextColor = if (isDarkTheme) Color.Black else Color.White
+    val modeLabel = when (rateMode) {
+        RateMode.ALL -> stringResource(R.string.main_rate_mode_all)
+        RateMode.MASTER_ONLY -> stringResource(R.string.main_rate_mode_master)
+        RateMode.APPEND_ONLY -> stringResource(R.string.main_rate_mode_append)
+    }
 
     val sourceRecords = when (selectedTab) {
         UsedListTab.BEST -> bestFrameRecords
@@ -154,6 +160,16 @@ fun UsedListScreen(
                     onClick = { selectedTab = UsedListTab.RECENT },
                 )
             }
+
+            AccentButton(
+                text = modeLabel,
+                selected = true,
+                modifier = Modifier.fillMaxWidth(),
+                accentColor = accentColor,
+                baseColor = baseButtonColor,
+                selectedTextColor = selectedTextColor,
+                onClick = { viewModel.toggleRateMode() },
+            )
 
             AccentButton(
                 text = if (showSortControls) {

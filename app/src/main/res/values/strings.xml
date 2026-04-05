@@ -1,6 +1,6 @@
 ﻿<resources>
     <string name="app_name">メモリーコレクト</string>
-    <string name="title_best30">ベストレート</string>
+    <string name="title_best30">ベスト15</string>
     <string name="title_recent10">直近レート</string>
     <string name="title_total_rate">プレイヤーレート</string>
     <string name="menu_drawer">メニュー</string>
@@ -26,6 +26,7 @@
     <string name="main_rate_mode_all">対象: すべて</string>
     <string name="main_rate_mode_master">対象: MASTERまで</string>
     <string name="main_rate_mode_append">対象: APPEND</string>
+    <string name="main_app_version">バージョン:%1$s</string>
     <string name="cd_open_menu">メニューを開く</string>
     <string name="cd_toggle_rate_mode">対象譜面を切り替える</string>
     <string name="cd_back">戻る</string>
@@ -96,7 +97,7 @@
     <string name="edit_score_level_mismatch_use_input">今回入力(Lv.%1$d)に合わせる</string>
 
     <string name="used_list_title">使用楽曲一覧</string>
-    <string name="used_list_best_tab">ベスト枠 (30曲)</string>
+    <string name="used_list_best_tab">ベスト枠 (15曲)</string>
     <string name="used_list_recent_tab">直近枠 (10曲)</string>
     <string name="used_list_empty">対象楽曲はまだありません</string>
     <string name="used_list_sort_type">ソート</string>
